@@ -5,6 +5,7 @@ import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
 import { BuyButton } from "@/components/BuyButton";
 import { ChatButton } from "@/components/ChatButton";
+import { ProductGallery } from "@/components/ProductGallery";
 import { CONDITION_LABEL } from "@/lib/categories";
 
 export default async function ProductDetailPage({
@@ -27,9 +28,7 @@ export default async function ProductDetailPage({
       <Header user={user} />
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-6">
-        <div className="flex h-64 items-center justify-center rounded-[var(--radius-lg)] bg-neutral-100 text-sm text-neutral-400">
-          ไม่มีรูปภาพ
-        </div>
+        <ProductGallery images={product.images} title={product.title} />
 
         <div className="mt-5 flex flex-col gap-3">
           <div className="flex items-start justify-between gap-4">
