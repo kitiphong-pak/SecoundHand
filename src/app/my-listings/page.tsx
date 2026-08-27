@@ -4,13 +4,13 @@ import { getCurrentUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
+import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
 
-const STATUS_BADGE: Record<
+const PRODUCT_STATUS_BADGE: Record<
   string,
   { label: string; status: "pending" | "success" | "neutral" | "error" | "info" }
 > = {
   listed: { label: "กำลังขาย", status: "info" },
-  reserved: { label: "รอชำระเงิน", status: "pending" },
   sold: { label: "ขายแล้ว", status: "success" },
   removed: { label: "ลบแล้ว", status: "neutral" },
 };
@@ -47,7 +47,16 @@ export default async function MyListingsPage() {
         ) : (
           <div className="mt-5 flex flex-col gap-3">
             {products.map((product) => {
-              const badge = STATUS_BADGE[product.status];
+              // สินค้าสถานะ "reserved" อยู่ได้หลายจุดใน order flow (รอชำระ/ชำระแล้ว/รอส่งมอบ/รอ OTP)
+              // ต้องดูสถานะออเดอร์จริงแทนป้าย "reserved" เดียวตายตัว ไม่งั้นจะค้างโชว์ "รอชำระเงิน"
+              // ทั้งที่จริงจ่ายเงินและส่งของไปแล้ว
+              const badge =
+                product.status === "reserved"
+                  ? ORDER_STATUS_LABEL[
+                      db.orders.find((o) => o.productId === product.id && o.status !== "completed")
+                        ?.status ?? "pending_payment"
+                    ]
+                  : PRODUCT_STATUS_BADGE[product.status];
               return (
                 <Link
                   key={product.id}

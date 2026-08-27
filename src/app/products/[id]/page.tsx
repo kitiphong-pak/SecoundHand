@@ -7,6 +7,7 @@ import { BuyButton } from "@/components/BuyButton";
 import { ChatButton } from "@/components/ChatButton";
 import { ProductGallery } from "@/components/ProductGallery";
 import { CONDITION_LABEL } from "@/lib/categories";
+import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
 
 export default async function ProductDetailPage({
   params,
@@ -23,6 +24,16 @@ export default async function ProductDetailPage({
 
   const seller = db.users.find((u) => u.id === product.sellerId);
 
+  // สถานะ "reserved" อยู่ได้หลายจุดใน order flow — ต้องดูสถานะออเดอร์จริง ไม่งั้นจะค้าง
+  // โชว์ "รอชำระเงิน" ทั้งที่จ่ายเงิน/ส่งของไปแล้ว (บั๊กเดียวกับที่เจอในหน้าสินค้าของฉัน)
+  const activeOrderBadge =
+    product.status === "reserved"
+      ? ORDER_STATUS_LABEL[
+          db.orders.find((o) => o.productId === product.id && o.status !== "completed")
+            ?.status ?? "pending_payment"
+        ]
+      : null;
+
   return (
     <div className="flex min-h-full flex-1 flex-col bg-neutral-50">
       <Header user={user} />
@@ -36,7 +47,9 @@ export default async function ProductDetailPage({
               {product.title}
             </h1>
             {product.status === "sold" && <Badge status="neutral">ขายแล้ว</Badge>}
-            {product.status === "reserved" && <Badge status="pending">รอชำระเงิน</Badge>}
+            {activeOrderBadge && (
+              <Badge status={activeOrderBadge.status}>{activeOrderBadge.label}</Badge>
+            )}
           </div>
 
           <p className="font-[var(--font-display)] text-2xl font-semibold text-primary-600">

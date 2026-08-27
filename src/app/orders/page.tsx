@@ -4,18 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
-
-const STATUS_BADGE: Record<
-  string,
-  { label: string; status: "pending" | "success" | "neutral" | "error" | "info" }
-> = {
-  pending_payment: { label: "รอชำระเงิน", status: "pending" },
-  paid: { label: "รอส่งมอบ", status: "info" },
-  awaiting_buyer_confirmation: { label: "รอยืนยันรับสินค้า", status: "info" },
-  awaiting_otp_entry: { label: "รอกรอก OTP", status: "info" },
-  completed: { label: "สำเร็จ", status: "success" },
-  disputed: { label: "มีข้อพิพาท", status: "error" },
-};
+import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
 
 export default async function OrdersPage() {
   const user = await getCurrentUser();
@@ -43,7 +32,7 @@ export default async function OrdersPage() {
             {orders.map((order) => {
               const product = db.products.find((p) => p.id === order.productId);
               const isBuyer = order.buyerId === user.id;
-              const badge = STATUS_BADGE[order.status];
+              const badge = ORDER_STATUS_LABEL[order.status];
               return (
                 <Link
                   key={order.id}

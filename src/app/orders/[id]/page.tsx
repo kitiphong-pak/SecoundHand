@@ -5,18 +5,7 @@ import { getDb } from "@/lib/db";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
 import { OrderActions } from "@/components/OrderActions";
-
-const STATUS_BADGE: Record<
-  string,
-  { label: string; status: "pending" | "success" | "neutral" | "error" | "info" }
-> = {
-  pending_payment: { label: "รอชำระเงิน", status: "pending" },
-  paid: { label: "ชำระเงินแล้ว รอส่งมอบ", status: "info" },
-  awaiting_buyer_confirmation: { label: "รอผู้ซื้อยืนยันรับสินค้า", status: "info" },
-  awaiting_otp_entry: { label: "รอผู้ขายกรอก OTP", status: "info" },
-  completed: { label: "ปิดการซื้อขายแล้ว", status: "success" },
-  disputed: { label: "มีข้อพิพาท", status: "error" },
-};
+import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
 
 export default async function OrderDetailPage({
   params,
@@ -36,7 +25,7 @@ export default async function OrderDetailPage({
   const buyer = db.users.find((u) => u.id === order.buyerId);
   const seller = db.users.find((u) => u.id === order.sellerId);
   const role: "buyer" | "seller" = order.buyerId === user.id ? "buyer" : "seller";
-  const badge = STATUS_BADGE[order.status];
+  const badge = ORDER_STATUS_LABEL[order.status];
 
   // ห้ามส่งรหัส OTP จริงไปให้ฝั่งผู้ขายเด็ดขาด (ต้องรับจากผู้ซื้อเท่านั้นถึงจะกรอกได้)
   // ต่อให้ UI ไม่แสดง ถ้าไม่ตัดออกตรงนี้ค่าจะรั่วไปกับ RSC payload ที่ส่งลง client อยู่ดี

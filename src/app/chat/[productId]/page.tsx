@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, toPublicUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { Header } from "@/components/Header";
 import { ChatThread } from "@/components/ChatThread";
@@ -56,7 +56,7 @@ export default async function ChatPage({
           <p className="text-xs text-neutral-400">แชทเกี่ยวกับ</p>
           <p className="text-sm font-medium text-neutral-900">{product.title}</p>
         </div>
-        <ChatThread productId={productId} currentUserId={user.id} otherUser={otherUser} />
+        <ChatThread productId={productId} currentUserId={user.id} otherUser={toPublicUser(otherUser)} />
       </main>
     </div>
   );

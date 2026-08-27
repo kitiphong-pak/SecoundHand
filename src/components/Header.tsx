@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { User } from "@/types";
+import type { PublicUser } from "@/lib/auth";
 import { LogoutButton } from "@/components/LogoutButton";
 
 interface Badges {
@@ -32,7 +32,7 @@ function NavItem({ href, label, count }: { href: string; label: string; count: n
   );
 }
 
-export function Header({ user }: { user: User }) {
+export function Header({ user }: { user: PublicUser }) {
   const [badges, setBadges] = useState<Badges>({
     unreadChats: 0,
     paidAwaitingShipment: 0,
