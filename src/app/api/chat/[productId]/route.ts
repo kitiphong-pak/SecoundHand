@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb, nextId } from "@/lib/db";
-import { notify } from "@/lib/notify";
+import { notifyMessage } from "@/lib/notify";
 
 export async function GET(
   req: Request,
@@ -29,6 +29,13 @@ export async function GET(
   messages.forEach((m) => {
     if (m.toUserId === user.id) m.read = true;
   });
+
+  // เข้ามาดูแชทนี้ตรงๆ (ไม่ได้กดผ่านกระดิ่งแจ้งเตือน) ก็ต้องเคลียร์แจ้งเตือนของเธรดนี้ด้วย
+  // เหมือนกัน กันมันค้างเป็นยังไม่อ่านทั้งที่จริงเห็นข้อความแล้ว
+  const threadLink = `/chat/${productId}?with=${withUserId}`;
+  db.notifications
+    .filter((n) => n.userId === user.id && n.type === "message" && n.link === threadLink)
+    .forEach((n) => { n.read = true; });
 
   return NextResponse.json({ messages });
 }
@@ -63,9 +70,8 @@ export async function POST(
   };
   db.messages.push(message);
 
-  notify(
+  notifyMessage(
     toUserId,
-    "message",
     `ข้อความใหม่จาก ${user.name}`,
     text.length > 60 ? `${text.slice(0, 60)}...` : text,
     `/chat/${productId}?with=${user.id}`
