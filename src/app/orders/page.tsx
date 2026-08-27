@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
+import { mapOrder } from "@/lib/mappers";
 import { Header } from "@/components/Header";
 import { OrderList, type OrderRow } from "@/components/OrderList";
 import { getOrderActivityAt } from "@/lib/orderActivity";
@@ -9,12 +10,26 @@ export default async function OrdersPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const db = getDb();
-  const orderRows: OrderRow[] = db.orders
-    .filter((o) => o.buyerId === user.id || o.sellerId === user.id)
+  const { data: orderRows } = await supabase
+    .from("orders")
+    .select("*")
+    .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`);
+  const orders = (orderRows ?? []).map(mapOrder);
+
+  const productIds = [...new Set(orders.map((o) => o.productId))];
+  const titleByProduct = new Map<string, string>();
+  if (productIds.length > 0) {
+    const { data: productRows } = await supabase
+      .from("products")
+      .select("id, title")
+      .in("id", productIds);
+    for (const p of productRows ?? []) titleByProduct.set(p.id, p.title);
+  }
+
+  const orderRowsForList: OrderRow[] = orders
     .map((o) => ({
       id: o.id,
-      productTitle: db.products.find((p) => p.id === o.productId)?.title ?? "สินค้าไม่พบ",
+      productTitle: titleByProduct.get(o.productId) ?? "สินค้าไม่พบ",
       isBuyer: o.buyerId === user.id,
       amount: o.amount,
       status: o.status,
@@ -31,12 +46,12 @@ export default async function OrdersPage() {
           ออเดอร์ของฉัน
         </h1>
 
-        {orderRows.length === 0 ? (
+        {orderRowsForList.length === 0 ? (
           <div className="mt-10 rounded-[var(--radius-lg)] border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-500">
             ยังไม่มีออเดอร์
           </div>
         ) : (
-          <OrderList orders={orderRows} />
+          <OrderList orders={orderRowsForList} />
         )}
       </main>
     </div>

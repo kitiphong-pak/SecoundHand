@@ -1,14 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getDb } from "@/lib/db";
-
-function completeOrder(order: ReturnType<typeof getDb>["orders"][number]) {
-  order.status = "completed";
-  order.completedAt = new Date().toISOString();
-  const db = getDb();
-  const product = db.products.find((p) => p.id === order.productId);
-  if (product) product.status = "sold";
-}
+import { supabase } from "@/lib/supabase";
+import { mapOrder } from "@/lib/mappers";
+import { completeOrder } from "@/lib/orderCompletion";
 
 export async function POST(
   req: Request,
@@ -21,9 +15,10 @@ export async function POST(
   const body = await req.json().catch(() => null);
   const code = String(body?.code ?? "").trim();
 
-  const db = getDb();
-  const order = db.orders.find((o) => o.id === id);
-  if (!order) return NextResponse.json({ error: "ไม่พบออเดอร์นี้" }, { status: 404 });
+  const { data: orderRow } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
+  if (!orderRow) return NextResponse.json({ error: "ไม่พบออเดอร์นี้" }, { status: 404 });
+
+  const order = mapOrder(orderRow);
   if (order.sellerId !== user.id) {
     return NextResponse.json({ error: "ไม่มีสิทธิ์ทำรายการนี้" }, { status: 403 });
   }
@@ -37,7 +32,6 @@ export async function POST(
     return NextResponse.json({ error: "รหัส OTP ไม่ถูกต้อง" }, { status: 400 });
   }
 
-  completeOrder(order);
-
-  return NextResponse.json({ order });
+  const updated = await completeOrder(order.id, order.productId);
+  return NextResponse.json({ order: updated });
 }

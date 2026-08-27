@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getDb, nextId } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
+import { mapProduct } from "@/lib/mappers";
 import type { ProductCondition } from "@/types";
 
 const CONDITIONS: ProductCondition[] = ["new", "like_new", "good", "fair"];
@@ -34,21 +35,24 @@ export async function POST(req: Request) {
     .filter((img: unknown): img is string => typeof img === "string" && img.startsWith("/uploads/"))
     .slice(0, MAX_IMAGES);
 
-  const db = getDb();
-  const product = {
-    id: nextId("p"),
-    sellerId: user.id,
-    title,
-    description,
-    price,
-    category,
-    condition,
-    province: user.province, // สินค้าใช้จังหวัดเดียวกับผู้ขายเสมอ
-    images,
-    status: "listed" as const,
-    createdAt: new Date().toISOString(),
-  };
-  db.products.unshift(product);
+  const { data: row, error } = await supabase
+    .from("products")
+    .insert({
+      seller_id: user.id,
+      title,
+      description,
+      price,
+      category,
+      condition,
+      province: user.province, // สินค้าใช้จังหวัดเดียวกับผู้ขายเสมอ
+      images,
+      status: "listed",
+    })
+    .select()
+    .single();
+  if (error || !row) {
+    return NextResponse.json({ error: "สร้างประกาศไม่สำเร็จ" }, { status: 500 });
+  }
 
-  return NextResponse.json({ product }, { status: 201 });
+  return NextResponse.json({ product: mapProduct(row) }, { status: 201 });
 }

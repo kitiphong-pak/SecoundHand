@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
+import { mapOrder } from "@/lib/mappers";
 
 // ชำระเงินแบบเดโม — จำลองผลลัพธ์สำเร็จเสมอ ไม่ตัดเงินจริง ไม่เชื่อมต่อผู้ให้บริการภายนอก
 export async function POST(
@@ -11,9 +12,10 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "ไม่ได้เข้าสู่ระบบ" }, { status: 401 });
 
   const { id } = await params;
-  const db = getDb();
-  const order = db.orders.find((o) => o.id === id);
-  if (!order) return NextResponse.json({ error: "ไม่พบออเดอร์นี้" }, { status: 404 });
+  const { data: orderRow } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
+  if (!orderRow) return NextResponse.json({ error: "ไม่พบออเดอร์นี้" }, { status: 404 });
+
+  const order = mapOrder(orderRow);
   if (order.buyerId !== user.id) {
     return NextResponse.json({ error: "ไม่มีสิทธิ์ทำรายการนี้" }, { status: 403 });
   }
@@ -21,7 +23,13 @@ export async function POST(
     return NextResponse.json({ error: "ออเดอร์นี้ชำระเงินไปแล้ว" }, { status: 409 });
   }
 
-  order.status = "paid";
+  const { data: updated, error } = await supabase
+    .from("orders")
+    .update({ status: "paid" })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error || !updated) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
 
-  return NextResponse.json({ order });
+  return NextResponse.json({ order: mapOrder(updated) });
 }

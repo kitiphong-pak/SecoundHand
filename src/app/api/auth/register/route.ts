@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { getDb, nextId } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
+import { mapUser } from "@/lib/mappers";
 import { createSession, toPublicUser } from "@/lib/auth";
 import { PROVINCES, type Province } from "@/lib/provinces";
 
@@ -26,24 +27,33 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "กรุณาเลือกจังหวัดให้ถูกต้อง" }, { status: 400 });
   }
 
-  const db = getDb();
-  if (db.users.some((u) => u.email === email)) {
+  const { data: existing } = await supabase
+    .from("users")
+    .select("id")
+    .eq("email", email)
+    .maybeSingle();
+  if (existing) {
     return NextResponse.json({ error: "อีเมลนี้ถูกใช้งานแล้ว" }, { status: 409 });
   }
 
   const passwordHash = bcrypt.hashSync(password, 10);
-  const user = {
-    id: nextId("u"),
-    name,
-    email,
-    passwordHash,
-    province,
-    role: "user" as const,
-    isVerified: false,
-    createdAt: new Date().toISOString(),
-  };
-  db.users.push(user);
-  await createSession(user.id);
+  const { data: row, error } = await supabase
+    .from("users")
+    .insert({
+      name,
+      email,
+      password_hash: passwordHash,
+      province,
+      role: "user",
+      is_verified: false,
+    })
+    .select()
+    .single();
+  if (error || !row) {
+    return NextResponse.json({ error: "สมัครสมาชิกไม่สำเร็จ" }, { status: 500 });
+  }
 
+  const user = mapUser(row);
+  await createSession(user.id);
   return NextResponse.json({ user: toPublicUser(user) }, { status: 201 });
 }

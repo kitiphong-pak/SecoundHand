@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
-import { getCurrentUser, toPublicUser } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 import { Header } from "@/components/Header";
 import { ChatThread } from "@/components/ChatThread";
 
@@ -17,20 +17,28 @@ export default async function ChatPage({
   const { productId } = await params;
   const { with: withParam } = await searchParams;
 
-  const db = getDb();
-  const product = db.products.find((p) => p.id === productId);
+  const { data: product } = await supabase
+    .from("products")
+    .select("id, title, seller_id")
+    .eq("id", productId)
+    .maybeSingle();
   if (!product) notFound();
 
   // ถ้าเป็นผู้ขาย ต้องระบุว่าคุยกับผู้ซื้อคนไหน (ผ่าน query) ไม่งั้นหาจากคนล่าสุดที่เคยทักมา
   let withUserId = withParam;
   if (!withUserId) {
-    if (product.sellerId !== user.id) {
-      withUserId = product.sellerId;
+    if (product.seller_id !== user.id) {
+      withUserId = product.seller_id;
     } else {
-      const lastMsg = db.messages
-        .filter((m) => m.productId === productId && m.toUserId === user.id)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-      withUserId = lastMsg?.fromUserId;
+      const { data: lastMsg } = await supabase
+        .from("chat_messages")
+        .select("from_user_id")
+        .eq("product_id", productId)
+        .eq("to_user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      withUserId = lastMsg?.from_user_id;
     }
   }
 
@@ -45,7 +53,13 @@ export default async function ChatPage({
     );
   }
 
-  const otherUser = db.users.find((u) => u.id === withUserId);
+  // เลือกเฉพาะ id/name ที่ ChatThread (client component) ต้องใช้ — ไม่ดึง password_hash
+  // ขึ้นมาไว้ในหน่วยความจำเลยตั้งแต่ต้น กัน hash หลุดไปกับ RSC payload ถ้ามีคนแก้โค้ดพลาดอนาคต
+  const { data: otherUser } = await supabase
+    .from("users")
+    .select("id, name")
+    .eq("id", withUserId)
+    .maybeSingle();
   if (!otherUser) notFound();
 
   return (
@@ -56,7 +70,7 @@ export default async function ChatPage({
           <p className="text-xs text-neutral-400">แชทเกี่ยวกับ</p>
           <p className="text-sm font-medium text-neutral-900">{product.title}</p>
         </div>
-        <ChatThread productId={productId} currentUserId={user.id} otherUser={toPublicUser(otherUser)} />
+        <ChatThread productId={productId} currentUserId={user.id} otherUser={otherUser} />
       </main>
     </div>
   );

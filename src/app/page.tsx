@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
+import { mapProduct } from "@/lib/mappers";
 import { Header } from "@/components/Header";
 import { ProductCard } from "@/components/ProductCard";
 
@@ -8,11 +9,14 @@ export default async function HomePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const db = getDb();
   // ฟีเจอร์หลัก: กรองสินค้าตามจังหวัดของผู้ใช้งานโดยอัตโนมัติ
-  const products = db.products.filter(
-    (p) => p.province === user.province && p.status === "listed"
-  );
+  const { data: rows } = await supabase
+    .from("products")
+    .select("*")
+    .eq("province", user.province)
+    .eq("status", "listed")
+    .order("created_at", { ascending: false });
+  const products = (rows ?? []).map(mapProduct);
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-neutral-50">

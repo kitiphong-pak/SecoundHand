@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 
 // จำนวนตัวเลขติดเมนู แทนกระดิ่งแจ้งเตือนแบบเดิม — คำนวณจากสถานะจริงตรงๆ ไม่ต้องมี
 // notification log แยกต่างหาก:
@@ -12,27 +12,32 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "ไม่ได้เข้าสู่ระบบ" }, { status: 401 });
 
-  const db = getDb();
+  const [{ data: unreadRows }, { count: paidAwaitingShipment }, { count: awaitingConfirmation }] =
+    await Promise.all([
+      supabase
+        .from("chat_messages")
+        .select("product_id, from_user_id")
+        .eq("to_user_id", user.id)
+        .eq("read", false),
+      supabase
+        .from("orders")
+        .select("*", { count: "exact", head: true })
+        .eq("seller_id", user.id)
+        .eq("status", "paid"),
+      supabase
+        .from("orders")
+        .select("*", { count: "exact", head: true })
+        .eq("buyer_id", user.id)
+        .eq("status", "awaiting_buyer_confirmation"),
+    ]);
 
-  const unreadThreadKeys = new Set<string>();
-  for (const m of db.messages) {
-    if (m.toUserId === user.id && !m.read) {
-      const otherUserId = m.fromUserId;
-      unreadThreadKeys.add(`${m.productId}:${otherUserId}`);
-    }
-  }
-
-  const paidAwaitingShipment = db.orders.filter(
-    (o) => o.sellerId === user.id && o.status === "paid"
-  ).length;
-
-  const awaitingConfirmation = db.orders.filter(
-    (o) => o.buyerId === user.id && o.status === "awaiting_buyer_confirmation"
-  ).length;
+  const unreadThreadKeys = new Set(
+    (unreadRows ?? []).map((r) => `${r.product_id}:${r.from_user_id}`)
+  );
 
   return NextResponse.json({
     unreadChats: unreadThreadKeys.size,
-    paidAwaitingShipment,
-    awaitingConfirmation,
+    paidAwaitingShipment: paidAwaitingShipment ?? 0,
+    awaitingConfirmation: awaitingConfirmation ?? 0,
   });
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
+import { mapOrder } from "@/lib/mappers";
 import { DISPUTE_GRACE_MS } from "@/lib/orderTiming";
 
 export async function POST(
@@ -15,9 +16,10 @@ export async function POST(
   const reason = String(body?.reason ?? "").trim();
   if (!reason) return NextResponse.json({ error: "กรุณาระบุเหตุผล" }, { status: 400 });
 
-  const db = getDb();
-  const order = db.orders.find((o) => o.id === id);
-  if (!order) return NextResponse.json({ error: "ไม่พบออเดอร์นี้" }, { status: 404 });
+  const { data: orderRow } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
+  if (!orderRow) return NextResponse.json({ error: "ไม่พบออเดอร์นี้" }, { status: 404 });
+
+  const order = mapOrder(orderRow);
   if (order.buyerId !== user.id) {
     return NextResponse.json({ error: "เฉพาะผู้ซื้อเท่านั้นที่เปิดข้อพิพาทได้" }, { status: 403 });
   }
@@ -32,9 +34,17 @@ export async function POST(
     return NextResponse.json({ error: "ไม่สามารถเปิดข้อพิพาทในสถานะนี้ได้" }, { status: 409 });
   }
 
-  order.status = "disputed";
-  order.disputeReason = reason;
-  order.disputeOpenedAt = new Date().toISOString();
+  const { data: updated, error } = await supabase
+    .from("orders")
+    .update({
+      status: "disputed",
+      dispute_reason: reason,
+      dispute_opened_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error || !updated) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
 
-  return NextResponse.json({ order });
+  return NextResponse.json({ order: mapOrder(updated) });
 }

@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
+import { mapProduct } from "@/lib/mappers";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
 import { BuyButton } from "@/components/BuyButton";
@@ -8,6 +9,7 @@ import { ChatButton } from "@/components/ChatButton";
 import { ProductGallery } from "@/components/ProductGallery";
 import { CONDITION_LABEL } from "@/lib/categories";
 import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
+import type { OrderStatus } from "@/types";
 
 export default async function ProductDetailPage({
   params,
@@ -18,21 +20,29 @@ export default async function ProductDetailPage({
   if (!user) redirect("/login");
 
   const { id } = await params;
-  const db = getDb();
-  const product = db.products.find((p) => p.id === id);
-  if (!product) notFound();
+  const { data: productRow } = await supabase.from("products").select("*").eq("id", id).maybeSingle();
+  if (!productRow) notFound();
+  const product = mapProduct(productRow);
 
-  const seller = db.users.find((u) => u.id === product.sellerId);
+  // เลือกเฉพาะคอลัมน์ที่ต้องใช้แสดงผล ไม่ดึง password_hash ขึ้นมาไว้ในหน่วยความจำเลยตั้งแต่ต้น
+  const { data: seller } = await supabase
+    .from("users")
+    .select("name, is_verified")
+    .eq("id", product.sellerId)
+    .maybeSingle();
 
   // สถานะ "reserved" อยู่ได้หลายจุดใน order flow — ต้องดูสถานะออเดอร์จริง ไม่งั้นจะค้าง
   // โชว์ "รอชำระเงิน" ทั้งที่จ่ายเงิน/ส่งของไปแล้ว (บั๊กเดียวกับที่เจอในหน้าสินค้าของฉัน)
-  const activeOrderBadge =
-    product.status === "reserved"
-      ? ORDER_STATUS_LABEL[
-          db.orders.find((o) => o.productId === product.id && o.status !== "completed")
-            ?.status ?? "pending_payment"
-        ]
-      : null;
+  let activeOrderBadge = null;
+  if (product.status === "reserved") {
+    const { data: orderRow } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("product_id", product.id)
+      .neq("status", "completed")
+      .maybeSingle();
+    activeOrderBadge = ORDER_STATUS_LABEL[(orderRow?.status as OrderStatus) ?? "pending_payment"];
+  }
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-neutral-50">
@@ -73,7 +83,7 @@ export default async function ProductDetailPage({
               <div>
                 <p className="text-sm font-medium text-neutral-900">{seller.name}</p>
                 <p className="mt-1">
-                  {seller.isVerified ? (
+                  {seller.is_verified ? (
                     <Badge status="success">ยืนยันตัวตนแล้ว ✅</Badge>
                   ) : (
                     <Badge status="neutral">ยังไม่ยืนยันตัวตน</Badge>

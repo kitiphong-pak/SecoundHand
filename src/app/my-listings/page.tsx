@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
+import { mapProduct } from "@/lib/mappers";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
 import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
+import type { OrderStatus } from "@/types";
 
 const PRODUCT_STATUS_BADGE: Record<
   string,
@@ -19,10 +21,26 @@ export default async function MyListingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const db = getDb();
-  const products = db.products
-    .filter((p) => p.sellerId === user.id)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const { data: rows } = await supabase
+    .from("products")
+    .select("*")
+    .eq("seller_id", user.id)
+    .order("created_at", { ascending: false });
+  const products = (rows ?? []).map(mapProduct);
+
+  // สินค้าสถานะ "reserved" อยู่ได้หลายจุดใน order flow (รอชำระ/ชำระแล้ว/รอส่งมอบ/รอ OTP)
+  // ต้องดูสถานะออเดอร์จริงแทนป้าย "reserved" เดียวตายตัว ไม่งั้นจะค้างโชว์ "รอชำระเงิน"
+  // ทั้งที่จริงจ่ายเงินและส่งของไปแล้ว
+  const reservedIds = products.filter((p) => p.status === "reserved").map((p) => p.id);
+  const statusByProduct = new Map<string, OrderStatus>();
+  if (reservedIds.length > 0) {
+    const { data: orderRows } = await supabase
+      .from("orders")
+      .select("product_id, status")
+      .in("product_id", reservedIds)
+      .neq("status", "completed");
+    for (const o of orderRows ?? []) statusByProduct.set(o.product_id, o.status as OrderStatus);
+  }
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-neutral-50">
@@ -47,15 +65,9 @@ export default async function MyListingsPage() {
         ) : (
           <div className="mt-5 flex flex-col gap-3">
             {products.map((product) => {
-              // สินค้าสถานะ "reserved" อยู่ได้หลายจุดใน order flow (รอชำระ/ชำระแล้ว/รอส่งมอบ/รอ OTP)
-              // ต้องดูสถานะออเดอร์จริงแทนป้าย "reserved" เดียวตายตัว ไม่งั้นจะค้างโชว์ "รอชำระเงิน"
-              // ทั้งที่จริงจ่ายเงินและส่งของไปแล้ว
               const badge =
                 product.status === "reserved"
-                  ? ORDER_STATUS_LABEL[
-                      db.orders.find((o) => o.productId === product.id && o.status !== "completed")
-                        ?.status ?? "pending_payment"
-                    ]
+                  ? ORDER_STATUS_LABEL[statusByProduct.get(product.id) ?? "pending_payment"]
                   : PRODUCT_STATUS_BADGE[product.status];
               return (
                 <Link

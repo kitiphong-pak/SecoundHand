@@ -1,7 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
+import { mapOrder } from "@/lib/mappers";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
 import { OrderActions } from "@/components/OrderActions";
@@ -16,15 +17,19 @@ export default async function OrderDetailPage({
   if (!user) redirect("/login");
 
   const { id } = await params;
-  const db = getDb();
-  const order = db.orders.find((o) => o.id === id);
-  if (!order) notFound();
+  const { data: orderRow } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
+  if (!orderRow) notFound();
+  const order = mapOrder(orderRow);
   if (order.buyerId !== user.id && order.sellerId !== user.id) notFound();
 
-  const product = db.products.find((p) => p.id === order.productId);
-  const buyer = db.users.find((u) => u.id === order.buyerId);
-  const seller = db.users.find((u) => u.id === order.sellerId);
   const role: "buyer" | "seller" = order.buyerId === user.id ? "buyer" : "seller";
+
+  const [{ data: product }, { data: buyer }, { data: seller }] = await Promise.all([
+    supabase.from("products").select("title").eq("id", order.productId).maybeSingle(),
+    supabase.from("users").select("name").eq("id", order.buyerId).maybeSingle(),
+    supabase.from("users").select("name").eq("id", order.sellerId).maybeSingle(),
+  ]);
+
   const badge = ORDER_STATUS_LABEL[order.status];
 
   // ห้ามส่งรหัส OTP จริงไปให้ฝั่งผู้ขายเด็ดขาด (ต้องรับจากผู้ซื้อเท่านั้นถึงจะกรอกได้)

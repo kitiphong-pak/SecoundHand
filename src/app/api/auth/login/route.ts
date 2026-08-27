@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { getDb } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
+import { mapUser } from "@/lib/mappers";
 import { createSession, toPublicUser } from "@/lib/auth";
 
 export async function POST(req: Request) {
@@ -12,12 +13,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "กรุณากรอกอีเมลและรหัสผ่าน" }, { status: 400 });
   }
 
-  const db = getDb();
-  const user = db.users.find((u) => u.email === email);
-  if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
+  const { data: row } = await supabase.from("users").select("*").eq("email", email).maybeSingle();
+  if (!row || !bcrypt.compareSync(password, row.password_hash)) {
     return NextResponse.json({ error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" }, { status: 401 });
   }
 
+  const user = mapUser(row);
   await createSession(user.id);
   return NextResponse.json({ user: toPublicUser(user) });
 }
