@@ -70,19 +70,6 @@ export interface ChatMessage {
   read: boolean;
 }
 
-export type NotificationType = "message" | "interest" | "order_status";
-
-export interface AppNotification {
-  id: string;
-  userId: string;
-  type: NotificationType;
-  title: string;
-  body: string;
-  link?: string;
-  read: boolean;
-  createdAt: string;
-}
-
 export interface Review {
   id: string;
   orderId: string;

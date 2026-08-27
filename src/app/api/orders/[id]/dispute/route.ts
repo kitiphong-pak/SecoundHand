@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { notify } from "@/lib/notify";
 import { DISPUTE_GRACE_MS } from "@/lib/orderTiming";
 
 export async function POST(
@@ -36,14 +35,6 @@ export async function POST(
   order.status = "disputed";
   order.disputeReason = reason;
   order.disputeOpenedAt = new Date().toISOString();
-
-  notify(
-    order.sellerId,
-    "order_status",
-    "มีการเปิดข้อพิพาท",
-    `ผู้ซื้อเปิดข้อพิพาทสำหรับออเดอร์นี้: ${reason}`,
-    `/orders/${order.id}`
-  );
 
   return NextResponse.json({ order });
 }

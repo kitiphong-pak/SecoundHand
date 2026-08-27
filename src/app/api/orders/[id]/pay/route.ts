@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { notify } from "@/lib/notify";
 
 // ชำระเงินแบบเดโม — จำลองผลลัพธ์สำเร็จเสมอ ไม่ตัดเงินจริง ไม่เชื่อมต่อผู้ให้บริการภายนอก
 export async function POST(
@@ -23,14 +22,6 @@ export async function POST(
   }
 
   order.status = "paid";
-
-  notify(
-    order.sellerId,
-    "order_status",
-    "ได้รับการชำระเงินแล้ว",
-    "ผู้ซื้อชำระเงินแล้ว กรุณาเตรียมส่งมอบสินค้า",
-    `/orders/${order.id}`
-  );
 
   return NextResponse.json({ order });
 }

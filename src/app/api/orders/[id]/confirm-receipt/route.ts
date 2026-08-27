@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { notify } from "@/lib/notify";
 import { generateOtp, SELLER_OTP_WINDOW_MS } from "@/lib/orderTiming";
 
 export async function POST(
@@ -26,14 +25,6 @@ export async function POST(
   order.buyerConfirmedAt = new Date().toISOString();
   order.otpCode = generateOtp();
   order.otpExpiresAt = new Date(Date.now() + SELLER_OTP_WINDOW_MS).toISOString();
-
-  notify(
-    order.sellerId,
-    "order_status",
-    "ผู้ซื้อยืนยันได้รับสินค้าแล้ว",
-    "ขอรหัส OTP จากผู้ซื้อ แล้วกรอกเพื่อปิดการขายและรับเงิน",
-    `/orders/${order.id}`
-  );
 
   return NextResponse.json({ order });
 }

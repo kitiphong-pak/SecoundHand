@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { notify } from "@/lib/notify";
 
 // เดโมเท่านั้น: จำลองว่าเวลาผ่านไปจนครบกำหนด แล้ว "เงียบ = ยอมรับ" ตามหลักการที่ออกแบบไว้
 // เพื่อให้ทดสอบ flow auto-complete ได้โดยไม่ต้องรอ 3 วัน/24 ชม. จริง
@@ -26,26 +25,12 @@ export async function POST(
     order.completedAt = new Date().toISOString();
     const product = db.products.find((p) => p.id === order.productId);
     if (product) product.status = "sold";
-    notify(
-      order.sellerId,
-      "order_status",
-      "ระบบยืนยันแทนผู้ซื้ออัตโนมัติ",
-      "เกินกำหนดเวลารอผู้ซื้อยืนยัน ระบบปิดการขายและปล่อยเงินให้แล้ว",
-      `/orders/${order.id}`
-    );
   } else if (order.status === "awaiting_otp_entry") {
     // เกิน 24 ชม. ผู้ขายไม่กรอก OTP → ระบบปิดอัตโนมัติแทน (ผู้ซื้อยืนยันไปแล้วตั้งแต่ก่อนหน้า)
     order.status = "completed";
     order.completedAt = new Date().toISOString();
     const product = db.products.find((p) => p.id === order.productId);
     if (product) product.status = "sold";
-    notify(
-      order.sellerId,
-      "order_status",
-      "ระบบปิดการขายอัตโนมัติ",
-      "เกินเวลากรอก OTP ระบบปิดการขายและปล่อยเงินให้คุณแล้ว",
-      `/orders/${order.id}`
-    );
   } else {
     return NextResponse.json({ error: "ออเดอร์นี้ไม่อยู่ในสถานะที่รอ timeout" }, { status: 409 });
   }

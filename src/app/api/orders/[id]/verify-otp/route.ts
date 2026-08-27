@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { notify } from "@/lib/notify";
 
 function completeOrder(order: ReturnType<typeof getDb>["orders"][number]) {
   order.status = "completed";
@@ -39,14 +38,6 @@ export async function POST(
   }
 
   completeOrder(order);
-
-  notify(
-    order.buyerId,
-    "order_status",
-    "ปิดการซื้อขายเรียบร้อย",
-    "ขอบคุณที่ใช้บริการ อย่าลืมให้คะแนนรีวิวผู้ขายด้วยนะ",
-    `/orders/${order.id}`
-  );
 
   return NextResponse.json({ order });
 }

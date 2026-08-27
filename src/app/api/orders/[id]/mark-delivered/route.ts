@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { notify } from "@/lib/notify";
 
 export async function POST(
   _req: Request,
@@ -23,14 +22,6 @@ export async function POST(
 
   order.status = "awaiting_buyer_confirmation";
   order.sellerMarkedDeliveredAt = new Date().toISOString();
-
-  notify(
-    order.buyerId,
-    "order_status",
-    "ผู้ขายแจ้งส่งมอบสินค้าแล้ว",
-    "กรุณายืนยันเมื่อคุณได้รับสินค้าเรียบร้อย",
-    `/orders/${order.id}`
-  );
 
   return NextResponse.json({ order });
 }

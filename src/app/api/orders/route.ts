@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb, nextId } from "@/lib/db";
-import { notify } from "@/lib/notify";
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
@@ -31,14 +30,6 @@ export async function POST(req: Request) {
   };
   db.orders.push(order);
   product.status = "reserved";
-
-  notify(
-    product.sellerId,
-    "interest",
-    "มีคนสนใจสินค้าของคุณ",
-    `${user.name} กำลังสั่งซื้อ "${product.title}"`,
-    `/orders/${order.id}`
-  );
 
   return NextResponse.json({ order }, { status: 201 });
 }

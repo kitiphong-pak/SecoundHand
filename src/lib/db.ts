@@ -5,7 +5,6 @@ import type {
   Product,
   Order,
   ChatMessage,
-  AppNotification,
   Review,
 } from "@/types";
 
@@ -16,7 +15,6 @@ interface MockDb {
   products: Product[];
   orders: Order[];
   messages: ChatMessage[];
-  notifications: AppNotification[];
   reviews: Review[];
   sessions: Map<string, string>; // token -> userId
 }
@@ -77,7 +75,6 @@ function seed(): MockDb {
     products,
     orders: [],
     messages: [],
-    notifications: [],
     reviews: [],
     sessions: new Map(),
   };
