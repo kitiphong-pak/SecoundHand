@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
 import type {
   User,
   Product,
@@ -24,9 +25,12 @@ declare global {
   var __mockDb: MockDb | undefined;
 }
 
-let idCounter = 1;
+// ใช้ UUID แทน counter ไล่เลข — counter แบบ module-level ล้มเหลวได้ง่ายเวลา module
+// ถูก re-evaluate ใหม่ (เช่น dev server HMR รีเซ็ตตัวแปรกลับเป็น 1 ทั้งที่ globalThis
+// ยังมีข้อมูลเก่าอยู่ ทำให้ id ชนกัน) และจะยิ่งเป็นปัญหาจริงถ้า deploy เป็น serverless
+// ที่แต่ละ instance สุ่ม cold start คนละตัวคนละ counter
 export function nextId(prefix: string) {
-  return `${prefix}_${idCounter++}`;
+  return `${prefix}_${randomUUID()}`;
 }
 
 function seed(): MockDb {

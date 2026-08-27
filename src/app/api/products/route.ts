@@ -5,7 +5,6 @@ import type { ProductCondition } from "@/types";
 
 const CONDITIONS: ProductCondition[] = ["new", "like_new", "good", "fair"];
 const MAX_IMAGES = 5;
-const MAX_IMAGE_CHARS = 3_000_000; // กันไฟล์ที่ client ไม่ได้บีบอัดมา (~2.2MB ต่อรูปหลัง decode)
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
@@ -28,13 +27,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "กรุณาเลือกสภาพสินค้า" }, { status: 400 });
   }
 
+  // ตอนนี้รับเฉพาะ URL ที่อัปโหลดผ่าน /api/upload มาก่อนแล้วเท่านั้น (ไฟล์แยกเก็บใน public/uploads)
+  // ไม่รับ data URL ตรงๆ อีกต่อไป กัน client ที่ข้าม upload endpoint มายัดข้อมูลดิบใส่ record
   const rawImages = Array.isArray(body?.images) ? body.images : [];
   const images: string[] = rawImages
-    .filter((img: unknown): img is string => typeof img === "string" && img.startsWith("data:image/"))
+    .filter((img: unknown): img is string => typeof img === "string" && img.startsWith("/uploads/"))
     .slice(0, MAX_IMAGES);
-  if (images.some((img) => img.length > MAX_IMAGE_CHARS)) {
-    return NextResponse.json({ error: "ไฟล์รูปภาพมีขนาดใหญ่เกินไป" }, { status: 400 });
-  }
 
   const db = getDb();
   const product = {

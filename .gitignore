@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# user-uploaded content — เก็บเฉพาะเครื่อง demo แต่ละเครื่อง ไม่ commit เข้า repo
+/public/uploads/*
+!/public/uploads/.gitkeep

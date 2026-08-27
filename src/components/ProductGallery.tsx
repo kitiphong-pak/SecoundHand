@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 
 export function ProductGallery({ images, title }: { images: string[]; title: string }) {
   const [active, setActive] = useState(0);
@@ -15,26 +16,29 @@ export function ProductGallery({ images, title }: { images: string[]; title: str
 
   return (
     <div className="flex flex-col gap-2">
-      {/* eslint-disable-next-line @next/next/no-img-element -- data URL อยู่ใน memory ไม่ใช่ external URL */}
-      <img
-        src={images[active]}
-        alt={title}
-        className="h-64 w-full rounded-[var(--radius-lg)] object-cover sm:h-80"
-      />
+      <div className="relative h-64 w-full overflow-hidden rounded-[var(--radius-lg)] sm:h-80">
+        <Image
+          src={images[active]}
+          alt={title}
+          fill
+          sizes="(min-width: 640px) 640px, 100vw"
+          className="object-cover"
+          priority
+        />
+      </div>
       {images.length > 1 && (
         <div className="flex gap-2 overflow-x-auto">
           {images.map((src, i) => (
             <button
-              key={i}
+              key={src}
               type="button"
               onClick={() => setActive(i)}
               className={[
-                "h-16 w-16 flex-none overflow-hidden rounded-[var(--radius-md)] border-2",
+                "relative h-16 w-16 flex-none overflow-hidden rounded-[var(--radius-md)] border-2",
                 i === active ? "border-primary-500" : "border-transparent",
               ].join(" ")}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element -- data URL อยู่ใน memory ไม่ใช่ external URL */}
-              <img src={src} alt={`${title} รูปที่ ${i + 1}`} className="h-full w-full object-cover" />
+              <Image src={src} alt={`${title} รูปที่ ${i + 1}`} fill sizes="64px" className="object-cover" />
             </button>
           ))}
         </div>

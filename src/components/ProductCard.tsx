@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { Product } from "@/types";
 import { CONDITION_LABEL } from "@/lib/categories";
 
@@ -10,8 +11,9 @@ export function ProductCard({ product }: { product: Product }) {
       className="block overflow-hidden rounded-[var(--radius-lg)] border border-neutral-200 bg-white transition-shadow hover:shadow-md"
     >
       {cover ? (
-        // eslint-disable-next-line @next/next/no-img-element -- data URL อยู่ใน memory ไม่ใช่ external URL
-        <img src={cover} alt={product.title} className="h-36 w-full object-cover" />
+        <div className="relative h-36 w-full">
+          <Image src={cover} alt={product.title} fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover" />
+        </div>
       ) : (
         <div className="flex h-36 items-center justify-center bg-neutral-100 text-xs text-neutral-400">
           ไม่มีรูปภาพ

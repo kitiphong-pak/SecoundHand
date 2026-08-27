@@ -2,6 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
@@ -10,6 +11,17 @@ import { CATEGORIES, CONDITION_LABEL } from "@/lib/categories";
 import { fileToCompressedDataUrl } from "@/lib/image";
 
 const MAX_IMAGES = 5;
+
+async function uploadImage(dataUrl: string): Promise<string> {
+  const res = await fetch("/api/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image: dataUrl }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "อัปโหลดรูปภาพไม่สำเร็จ");
+  return data.url as string;
+}
 
 export function SellForm() {
   const router = useRouter();
@@ -39,12 +51,17 @@ export function SellForm() {
 
     setProcessingImages(true);
     try {
-      const compressed = await Promise.all(
-        toProcess.map((f) => fileToCompressedDataUrl(f))
-      );
-      setImages((prev) => [...prev, ...compressed]);
-    } catch {
-      setImageError("ไม่สามารถประมวลผลรูปภาพบางไฟล์ได้ ลองใหม่อีกครั้ง");
+      // บีบอัดฝั่ง client ก่อน แล้วอัปโหลดขึ้น server ทีละไฟล์ให้ได้ URL จริงกลับมา
+      // (เก็บเป็นไฟล์แยกใน public/uploads ไม่ใช่ embed data URL ไว้ในข้อมูลสินค้าตรงๆ แบบเดิม)
+      const uploaded: string[] = [];
+      for (const file of toProcess) {
+        const compressed = await fileToCompressedDataUrl(file);
+        const url = await uploadImage(compressed);
+        uploaded.push(url);
+      }
+      setImages((prev) => [...prev, ...uploaded]);
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : "อัปโหลดรูปภาพบางไฟล์ไม่สำเร็จ ลองใหม่อีกครั้ง");
     } finally {
       setProcessingImages(false);
     }
@@ -98,9 +115,14 @@ export function SellForm() {
 
         <div className="mt-1.5 grid grid-cols-3 gap-2 sm:grid-cols-4">
           {images.map((src, i) => (
-            <div key={i} className="group relative aspect-square overflow-hidden rounded-[var(--radius-md)] border border-neutral-200">
-              {/* eslint-disable-next-line @next/next/no-img-element -- data URL อยู่ใน memory ไม่ใช่ external URL, next/image ไม่จำเป็น */}
-              <img src={src} alt={`รูปสินค้า ${i + 1}`} className="h-full w-full object-cover" />
+            <div key={src} className="group relative aspect-square overflow-hidden rounded-[var(--radius-md)] border border-neutral-200">
+              <Image
+                src={src}
+                alt={`รูปสินค้า ${i + 1}`}
+                fill
+                sizes="120px"
+                className="object-cover"
+              />
               <button
                 type="button"
                 onClick={() => removeImage(i)}
@@ -120,7 +142,7 @@ export function SellForm() {
               className="flex aspect-square flex-col items-center justify-center gap-1 rounded-[var(--radius-md)] border-2 border-dashed border-neutral-300 text-neutral-400 hover:border-primary-500 hover:text-primary-500"
             >
               <span className="text-xl leading-none">+</span>
-              <span className="text-[11px]">{processingImages ? "กำลังโหลด..." : "เพิ่มรูป"}</span>
+              <span className="text-[11px]">{processingImages ? "กำลังอัปโหลด..." : "เพิ่มรูป"}</span>
             </button>
           )}
         </div>
