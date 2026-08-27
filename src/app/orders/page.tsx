@@ -1,19 +1,27 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { Header } from "@/components/Header";
-import { Badge } from "@/components/ui/Badge";
-import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
+import { OrderList, type OrderRow } from "@/components/OrderList";
+import { getOrderActivityAt } from "@/lib/orderActivity";
 
 export default async function OrdersPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const db = getDb();
-  const orders = db.orders
+  const orderRows: OrderRow[] = db.orders
     .filter((o) => o.buyerId === user.id || o.sellerId === user.id)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    .map((o) => ({
+      id: o.id,
+      productTitle: db.products.find((p) => p.id === o.productId)?.title ?? "สินค้าไม่พบ",
+      isBuyer: o.buyerId === user.id,
+      amount: o.amount,
+      status: o.status,
+      lastActivityAt: getOrderActivityAt(o),
+    }))
+    // รายการที่เพิ่งมีความเคลื่อนไหวล่าสุด (ไม่ใช่แค่เพิ่งสร้าง) ขึ้นบนสุด
+    .sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt));
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-neutral-50">
@@ -23,36 +31,12 @@ export default async function OrdersPage() {
           ออเดอร์ของฉัน
         </h1>
 
-        {orders.length === 0 ? (
+        {orderRows.length === 0 ? (
           <div className="mt-10 rounded-[var(--radius-lg)] border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-500">
             ยังไม่มีออเดอร์
           </div>
         ) : (
-          <div className="mt-5 flex flex-col gap-3">
-            {orders.map((order) => {
-              const product = db.products.find((p) => p.id === order.productId);
-              const isBuyer = order.buyerId === user.id;
-              const badge = ORDER_STATUS_LABEL[order.status];
-              return (
-                <Link
-                  key={order.id}
-                  href={`/orders/${order.id}`}
-                  className="flex items-center justify-between rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4 hover:shadow-sm"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-neutral-900">
-                      {product?.title ?? "สินค้าไม่พบ"}
-                    </p>
-                    <p className="mt-1 text-xs text-neutral-500">
-                      {isBuyer ? "คุณเป็นผู้ซื้อ" : "คุณเป็นผู้ขาย"} · ฿
-                      {order.amount.toLocaleString("th-TH")}
-                    </p>
-                  </div>
-                  {badge && <Badge status={badge.status}>{badge.label}</Badge>}
-                </Link>
-              );
-            })}
-          </div>
+          <OrderList orders={orderRows} />
         )}
       </main>
     </div>
