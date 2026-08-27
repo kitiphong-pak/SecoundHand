@@ -1,0 +1,229 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/Button";
+import { Textarea } from "@/components/ui/Textarea";
+import { Countdown } from "@/components/Countdown";
+import type { Order } from "@/types";
+import { BUYER_CONFIRM_WINDOW_MS } from "@/lib/orderTiming";
+
+async function call(url: string, body?: object) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "เกิดข้อผิดพลาด");
+  return data;
+}
+
+export function OrderActions({ order, role }: { order: Order; role: "buyer" | "seller" }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [otpInput, setOtpInput] = useState("");
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+  const [disputeReason, setDisputeReason] = useState("");
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setLoading(true);
+    setError("");
+    try {
+      await fn();
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // เช็คฝั่ง client เท่านั้น (ต้องพึ่ง Date.now() ซึ่งไม่ pure สำหรับ render โดยตรง)
+  // เริ่มที่ false กัน hydration mismatch แล้วค่อยอัปเดตจริงหลัง mount
+  const [canDisputeAfterComplete, setCanDisputeAfterComplete] = useState(false);
+  useEffect(() => {
+    if (order.status === "completed" && order.completedAt) {
+      const elapsed = Date.now() - new Date(order.completedAt).getTime();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCanDisputeAfterComplete(elapsed < 2 * 24 * 60 * 60 * 1000);
+    }
+  }, [order.status, order.completedAt]);
+
+  return (
+    <div className="flex flex-col gap-3">
+      {error && <p className="text-sm text-error-500">{error}</p>}
+
+      {/* รอชำระเงิน */}
+      {order.status === "pending_payment" && role === "buyer" && (
+        <>
+          <p className="text-sm text-neutral-600">
+            กรุณาชำระเงินเพื่อยืนยันคำสั่งซื้อ (เดโม — ไม่ตัดเงินจริง)
+          </p>
+          <Button disabled={loading} onClick={() => run(() => call(`/api/orders/${order.id}/pay`))}>
+            {loading ? "กำลังดำเนินการ..." : "ชำระเงิน (เดโม)"}
+          </Button>
+        </>
+      )}
+      {order.status === "pending_payment" && role === "seller" && (
+        <p className="text-sm text-neutral-500">รอผู้ซื้อชำระเงิน</p>
+      )}
+
+      {/* ชำระแล้ว รอส่งมอบ */}
+      {order.status === "paid" && role === "seller" && (
+        <>
+          <p className="text-sm text-neutral-600">เมื่อจัดส่ง/นัดส่งมอบสินค้าแล้ว ให้กดยืนยันด้านล่าง</p>
+          <Button
+            disabled={loading}
+            onClick={() => run(() => call(`/api/orders/${order.id}/mark-delivered`))}
+          >
+            {loading ? "กำลังดำเนินการ..." : "แจ้งส่งมอบสินค้าแล้ว"}
+          </Button>
+        </>
+      )}
+      {order.status === "paid" && role === "buyer" && (
+        <p className="text-sm text-neutral-500">รอผู้ขายส่งมอบสินค้า</p>
+      )}
+
+      {/* รอผู้ซื้อยืนยันรับของ */}
+      {order.status === "awaiting_buyer_confirmation" && order.sellerMarkedDeliveredAt && (
+        <>
+          <p className="text-sm text-neutral-600">
+            รอผู้ซื้อยืนยันการรับสินค้า —{" "}
+            <Countdown
+              targetIso={new Date(
+                new Date(order.sellerMarkedDeliveredAt).getTime() + BUYER_CONFIRM_WINDOW_MS
+              ).toISOString()}
+            />
+          </p>
+          {role === "buyer" && (
+            <>
+              <Button
+                disabled={loading}
+                onClick={() => run(() => call(`/api/orders/${order.id}/confirm-receipt`))}
+              >
+                {loading ? "กำลังดำเนินการ..." : "ยืนยันได้รับสินค้าแล้ว"}
+              </Button>
+              <button
+                type="button"
+                className="text-xs text-neutral-400 underline hover:text-error-500"
+                onClick={() => setShowDisputeForm((v) => !v)}
+              >
+                มีปัญหากับสินค้า? เปิดข้อพิพาท
+              </button>
+            </>
+          )}
+          {role === "seller" && (
+            <button
+              type="button"
+              disabled={loading}
+              className="text-xs text-neutral-400 underline"
+              onClick={() => run(() => call(`/api/orders/${order.id}/simulate-timeout`))}
+            >
+              (เดโม) จำลองว่าเวลาหมดแล้ว — ระบบยืนยันแทน
+            </button>
+          )}
+        </>
+      )}
+
+      {/* รอผู้ขายกรอก OTP */}
+      {order.status === "awaiting_otp_entry" && order.otpExpiresAt && (
+        <>
+          {role === "buyer" && (
+            <div className="rounded-[var(--radius-md)] bg-primary-50 p-4 text-center">
+              <p className="text-xs text-neutral-500">แจ้งรหัสนี้ให้ผู้ขายเพื่อปิดการขาย</p>
+              <p className="mt-1 font-[var(--font-display)] text-3xl font-semibold tracking-widest text-primary-600">
+                {order.otpCode}
+              </p>
+              <p className="mt-1 text-xs text-neutral-400">
+                <Countdown targetIso={order.otpExpiresAt} />
+              </p>
+            </div>
+          )}
+          {role === "seller" && (
+            <>
+              <p className="text-sm text-neutral-600">
+                ขอรหัส OTP จากผู้ซื้อ แล้วกรอกด้านล่างเพื่อปิดการขาย —{" "}
+                <Countdown targetIso={order.otpExpiresAt} />
+              </p>
+              <div className="flex gap-2">
+                <input
+                  value={otpInput}
+                  onChange={(e) => setOtpInput(e.target.value)}
+                  placeholder="รหัส 6 หลัก"
+                  maxLength={6}
+                  className="flex-1 rounded-[var(--radius-md)] border border-neutral-300 px-3.5 py-2.5 text-center text-lg tracking-widest outline-none focus:border-primary-500"
+                />
+                <Button
+                  disabled={loading || otpInput.length !== 6}
+                  onClick={() =>
+                    run(() => call(`/api/orders/${order.id}/verify-otp`, { code: otpInput }))
+                  }
+                >
+                  ยืนยัน
+                </Button>
+              </div>
+              <button
+                type="button"
+                disabled={loading}
+                className="text-xs text-neutral-400 underline"
+                onClick={() => run(() => call(`/api/orders/${order.id}/simulate-timeout`))}
+              >
+                (เดโม) จำลองว่าเวลาหมดแล้ว — ระบบปิดอัตโนมัติ
+              </button>
+            </>
+          )}
+        </>
+      )}
+
+      {/* ปิดการซื้อขายแล้ว */}
+      {order.status === "completed" && (
+        <>
+          <p className="text-sm text-success-500">✓ ปิดการซื้อขายเรียบร้อย เงินถูกโอนให้ผู้ขายแล้ว (เดโม)</p>
+          {role === "buyer" && canDisputeAfterComplete && (
+            <button
+              type="button"
+              className="text-xs text-neutral-400 underline hover:text-error-500"
+              onClick={() => setShowDisputeForm((v) => !v)}
+            >
+              มีปัญหาหลังปิดออเดอร์? เปิดข้อพิพาทได้ภายใน 2 วัน
+            </button>
+          )}
+        </>
+      )}
+
+      {/* มีข้อพิพาท */}
+      {order.status === "disputed" && (
+        <p className="text-sm text-error-500">
+          อยู่ระหว่างการตรวจสอบโดยแอดมิน กรุณารอการติดต่อกลับ
+        </p>
+      )}
+
+      {/* ฟอร์มเปิดข้อพิพาท */}
+      {showDisputeForm && (
+        <div className="mt-2 flex flex-col gap-2 rounded-[var(--radius-md)] border border-error-500/30 bg-error-50 p-3">
+          <Textarea
+            label="เหตุผลที่เปิดข้อพิพาท"
+            value={disputeReason}
+            onChange={(e) => setDisputeReason(e.target.value)}
+            rows={3}
+            placeholder="อธิบายปัญหาที่พบ..."
+          />
+          <Button
+            variant="primary"
+            disabled={loading || !disputeReason.trim()}
+            onClick={() =>
+              run(async () => {
+                await call(`/api/orders/${order.id}/dispute`, { reason: disputeReason });
+                setShowDisputeForm(false);
+              })
+            }
+          >
+            ส่งเรื่องข้อพิพาท
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

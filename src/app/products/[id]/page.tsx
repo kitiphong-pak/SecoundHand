@@ -3,14 +3,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-
-const CONDITION_LABEL: Record<string, string> = {
-  new: "ใหม่",
-  like_new: "เหมือนใหม่",
-  good: "สภาพดี",
-  fair: "พอใช้",
-};
+import { BuyButton } from "@/components/BuyButton";
+import { ChatButton } from "@/components/ChatButton";
+import { CONDITION_LABEL } from "@/lib/categories";
 
 export default async function ProductDetailPage({
   params,
@@ -77,16 +72,14 @@ export default async function ProductDetailPage({
           )}
 
           <div className="mt-4 flex gap-3">
-            <Button variant="secondary" className="flex-1">
-              แชทกับผู้ขาย
-            </Button>
-            <Button
-              variant="primary"
-              className="flex-1"
+            {product.sellerId !== user.id && (
+              <ChatButton productId={product.id} sellerId={product.sellerId} />
+            )}
+            <BuyButton
+              productId={product.id}
               disabled={product.status !== "listed" || product.sellerId === user.id}
-            >
-              {product.sellerId === user.id ? "สินค้าของคุณ" : "สั่งซื้อ"}
-            </Button>
+              isOwner={product.sellerId === user.id}
+            />
           </div>
         </div>
       </main>
