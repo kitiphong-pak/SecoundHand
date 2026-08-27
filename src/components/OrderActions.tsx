@@ -51,6 +51,15 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
     }
   }, [order.status, order.completedAt]);
 
+  // ออเดอร์รอฝั่งตรงข้ามทำอะไรบางอย่างอยู่ (ชำระเงิน/ส่งมอบ/ยืนยัน/กรอก OTP)
+  // ต้อง refresh หน้าเป็นระยะเพื่อดึงสถานะล่าสุด ไม่งั้นต้องกด reload เองถึงจะเห็นการเปลี่ยนแปลง
+  const isTerminal = order.status === "completed" || order.status === "disputed";
+  useEffect(() => {
+    if (isTerminal) return;
+    const interval = setInterval(() => router.refresh(), 4000);
+    return () => clearInterval(interval);
+  }, [isTerminal, router]);
+
   return (
     <div className="flex flex-col gap-3">
       {error && <p className="text-sm text-error-500">{error}</p>}
