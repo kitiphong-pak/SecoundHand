@@ -24,11 +24,21 @@ export async function POST(
 
   if (order.status === "awaiting_buyer_confirmation") {
     // เกินกำหนดไม่ตอบสนอง → ระบบยืนยันแทนอัตโนมัติ → ข้ามไปปิดการซื้อขายทันที
-    const updated = await completeOrder(order.id, order.productId);
+    const updated = await completeOrder(
+      order.id,
+      order.productId,
+      { id: user.id, role: user.role, name: user.name },
+      "timeout"
+    );
     return NextResponse.json({ order: updated });
   } else if (order.status === "awaiting_otp_entry") {
     // เกิน 24 ชม. ผู้ขายไม่กรอก OTP → ระบบปิดอัตโนมัติแทน (ผู้ซื้อยืนยันไปแล้วตั้งแต่ก่อนหน้า)
-    const updated = await completeOrder(order.id, order.productId);
+    const updated = await completeOrder(
+      order.id,
+      order.productId,
+      { id: user.id, role: user.role, name: user.name },
+      "timeout"
+    );
     return NextResponse.json({ order: updated });
   } else {
     return NextResponse.json({ error: "ออเดอร์นี้ไม่อยู่ในสถานะที่รอ timeout" }, { status: 409 });

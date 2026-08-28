@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapOrder } from "@/lib/mappers";
+import { logAction } from "@/lib/auditLog";
 
 // ชำระเงินแบบเดโม — จำลองผลลัพธ์สำเร็จเสมอ ไม่ตัดเงินจริง ไม่เชื่อมต่อผู้ให้บริการภายนอก
 export async function POST(
@@ -30,6 +31,16 @@ export async function POST(
     .select()
     .single();
   if (error || !updated) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+
+  await logAction({
+    actorId: user.id,
+    actorRole: user.role,
+    actorName: user.name,
+    action: "order.paid",
+    targetType: "order",
+    targetId: order.id,
+    metadata: { amount: order.amount },
+  });
 
   return NextResponse.json({ order: mapOrder(updated) });
 }

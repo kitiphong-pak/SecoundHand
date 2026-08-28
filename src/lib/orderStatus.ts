@@ -10,4 +10,5 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, { label: string; status: Ba
   awaiting_otp_entry: { label: "รอผู้ขายกรอก OTP", status: "info" },
   completed: { label: "ปิดการซื้อขายแล้ว", status: "success" },
   disputed: { label: "มีข้อพิพาท", status: "error" },
+  cancelled: { label: "ยกเลิก คืนเงินแล้ว (เดโม)", status: "neutral" },
 };

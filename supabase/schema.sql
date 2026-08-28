@@ -88,7 +88,9 @@ create index idx_messages_product on chat_messages(product_id);
 create index idx_messages_to_user_read on chat_messages(to_user_id, read);
 create index idx_sessions_user on sessions(user_id);
 
--- หมายเหตุ: ตารางเหล่านี้ยังไม่ได้เปิด Row Level Security (RLS) เพราะแอปเข้าถึงผ่าน
--- secret key (สิทธิ์แอดมิน) จาก server เท่านั้น ไม่มีโค้ดฝั่ง browser คิวรีตรงเข้ามาเลย
--- ถ้าในอนาคตอยากให้ browser คิวรีตรงด้วย publishable key ต้องเปิด RLS + เขียน policy
--- ให้แต่ละตารางก่อน ไม่งั้นทุกคนจะอ่าน/เขียนข้อมูลของคนอื่นได้หมด
+-- หมายเหตุ: แอปเข้าถึงตารางเหล่านี้ผ่าน secret key (service_role, สิทธิ์แอดมิน ข้าม RLS
+-- โดยอัตโนมัติ) จาก server เท่านั้น ไม่มีโค้ดฝั่ง browser คิวรีตรงเข้ามาเลย แต่ก็ยังเปิด Row
+-- Level Security ไว้เป็น default-deny สำหรับ anon/publishable key ด้วย (ดู
+-- supabase/migrations/005_enable_rls.sql) เผื่อ key รั่วหรือมีโค้ดฝั่ง client เผลอหลุดไปคิวรีตรง
+-- จะได้ไม่เห็นข้อมูลของคนอื่นทั้งระบบทันที ถ้าในอนาคตอยากให้ browser คิวรีตรงด้วย publishable
+-- key ต้องเขียน policy เฉพาะให้ตารางที่ต้องการเพิ่มเอง ไม่ใช่เปิด policy กว้างๆ แบบ "true"

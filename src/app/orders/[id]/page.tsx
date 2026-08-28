@@ -2,10 +2,11 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { mapOrder } from "@/lib/mappers";
+import { mapOrder, mapReview } from "@/lib/mappers";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
 import { OrderActions } from "@/components/OrderActions";
+import { ReviewForm } from "@/components/ReviewForm";
 import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
 
 export default async function OrderDetailPage({
@@ -15,6 +16,7 @@ export default async function OrderDetailPage({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (user.role === "admin") redirect("/admin");
 
   const { id } = await params;
   const { data: orderRow } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
@@ -35,6 +37,21 @@ export default async function OrderDetailPage({
   // ห้ามส่งรหัส OTP จริงไปให้ฝั่งผู้ขายเด็ดขาด (ต้องรับจากผู้ซื้อเท่านั้นถึงจะกรอกได้)
   // ต่อให้ UI ไม่แสดง ถ้าไม่ตัดออกตรงนี้ค่าจะรั่วไปกับ RSC payload ที่ส่งลง client อยู่ดี
   const orderForClient = role === "seller" ? { ...order, otpCode: undefined } : order;
+
+  // รีวิวได้เฉพาะออเดอร์ที่ปิดการซื้อขายแล้ว — เช็คว่าฉันรีวิวอีกฝ่ายไปหรือยัง
+  // และอีกฝ่ายรีวิวฉันไว้หรือเปล่า (โชว์ให้ดูได้ด้วยถ้ามี)
+  let myReview = null;
+  let theirReview = null;
+  if (order.status === "completed") {
+    const { data: reviewRows } = await supabase
+      .from("reviews")
+      .select("*")
+      .eq("order_id", order.id);
+    const reviews = (reviewRows ?? []).map(mapReview);
+    myReview = reviews.find((r) => r.fromUserId === user.id) ?? null;
+    theirReview = reviews.find((r) => r.fromUserId !== user.id) ?? null;
+  }
+  const otherPartyName = role === "buyer" ? seller?.name : buyer?.name;
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-neutral-50">
@@ -78,6 +95,30 @@ export default async function OrderDetailPage({
           <div className="mt-5 border-t border-neutral-100 pt-5">
             <OrderActions order={orderForClient} role={role} />
           </div>
+
+          {order.status === "completed" && (
+            <div className="mt-5 flex flex-col gap-3 border-t border-neutral-100 pt-5">
+              {myReview ? (
+                <div className="rounded-[var(--radius-md)] bg-neutral-50 p-3 text-sm">
+                  <p className="text-neutral-500">
+                    รีวิวของคุณ: {"⭐".repeat(myReview.rating)}
+                  </p>
+                  <p className="mt-1 text-neutral-700">{myReview.comment}</p>
+                </div>
+              ) : (
+                <ReviewForm orderId={order.id} targetLabel={otherPartyName ?? "อีกฝ่าย"} />
+              )}
+
+              {theirReview && (
+                <div className="rounded-[var(--radius-md)] bg-neutral-50 p-3 text-sm">
+                  <p className="text-neutral-500">
+                    {otherPartyName ?? "อีกฝ่าย"}รีวิวคุณ: {"⭐".repeat(theirReview.rating)}
+                  </p>
+                  <p className="mt-1 text-neutral-700">{theirReview.comment}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </main>
     </div>

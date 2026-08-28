@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { mapUser } from "@/lib/mappers";
 import { createSession, toPublicUser } from "@/lib/auth";
 import { PROVINCES, type Province } from "@/lib/provinces";
+import { logAction } from "@/lib/auditLog";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -55,5 +56,14 @@ export async function POST(req: Request) {
 
   const user = mapUser(row);
   await createSession(user.id);
+  await logAction({
+    actorId: user.id,
+    actorRole: user.role,
+    actorName: user.name,
+    action: "user.registered",
+    targetType: "user",
+    targetId: user.id,
+    metadata: { name: user.name, province: user.province },
+  });
   return NextResponse.json({ user: toPublicUser(user) }, { status: 201 });
 }

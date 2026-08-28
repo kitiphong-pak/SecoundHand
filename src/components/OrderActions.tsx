@@ -26,6 +26,7 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
   const [otpInput, setOtpInput] = useState("");
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const run = async (fn: () => Promise<unknown>) => {
     setLoading(true);
@@ -53,7 +54,8 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
 
   // ออเดอร์รอฝั่งตรงข้ามทำอะไรบางอย่างอยู่ (ชำระเงิน/ส่งมอบ/ยืนยัน/กรอก OTP)
   // ต้อง refresh หน้าเป็นระยะเพื่อดึงสถานะล่าสุด ไม่งั้นต้องกด reload เองถึงจะเห็นการเปลี่ยนแปลง
-  const isTerminal = order.status === "completed" || order.status === "disputed";
+  const isTerminal =
+    order.status === "completed" || order.status === "disputed" || order.status === "cancelled";
   useEffect(() => {
     if (isTerminal) return;
     const interval = setInterval(() => router.refresh(), 4000);
@@ -73,6 +75,13 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
           <Button disabled={loading} onClick={() => run(() => call(`/api/orders/${order.id}/pay`))}>
             {loading ? "กำลังดำเนินการ..." : "ชำระเงิน (เดโม)"}
           </Button>
+          <button
+            type="button"
+            className="text-xs text-neutral-400 underline hover:text-error-500"
+            onClick={() => setShowCancelConfirm((v) => !v)}
+          >
+            ยกเลิกคำสั่งซื้อ
+          </button>
         </>
       )}
       {order.status === "pending_payment" && role === "seller" && (
@@ -92,7 +101,16 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
         </>
       )}
       {order.status === "paid" && role === "buyer" && (
-        <p className="text-sm text-neutral-500">รอผู้ขายส่งมอบสินค้า</p>
+        <>
+          <p className="text-sm text-neutral-500">รอผู้ขายส่งมอบสินค้า</p>
+          <button
+            type="button"
+            className="text-xs text-neutral-400 underline hover:text-error-500"
+            onClick={() => setShowCancelConfirm((v) => !v)}
+          >
+            ยกเลิกคำสั่งซื้อ
+          </button>
+        </>
       )}
 
       {/* รอผู้ซื้อยืนยันรับของ */}
@@ -209,6 +227,15 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
         </p>
       )}
 
+      {/* ยกเลิกแล้ว — อาจมาจากผู้ซื้อกดยกเลิกเอง หรือแอดมินตัดสินข้อพิพาทให้ผู้ซื้อก็ได้ ไม่รู้จาก
+          Order object ตรงนี้ว่าเคยชำระเงินไปก่อนยกเลิกหรือเปล่า (ไม่ได้เก็บ paidAt แยก) เลยใช้
+          ข้อความกลางๆ ไม่ยืนยันว่ามีเงินคืนเสมอไป */}
+      {order.status === "cancelled" && (
+        <p className="text-sm text-neutral-500">
+          ออเดอร์นี้ถูกยกเลิกแล้ว ถ้าเคยชำระเงินไปแล้วจะได้รับเงินคืน (เดโม)
+        </p>
+      )}
+
       {/* ฟอร์มเปิดข้อพิพาท */}
       {showDisputeForm && (
         <div className="mt-2 flex flex-col gap-2 rounded-[var(--radius-md)] border border-error-500/30 bg-error-50 p-3">
@@ -231,6 +258,34 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
           >
             ส่งเรื่องข้อพิพาท
           </Button>
+        </div>
+      )}
+
+      {/* ยืนยันยกเลิกคำสั่งซื้อ — แยกขั้นตอนกันกดพลาด */}
+      {showCancelConfirm && (
+        <div className="mt-2 flex flex-col gap-2 rounded-[var(--radius-md)] border border-error-500/30 bg-error-50 p-3">
+          <p className="text-sm text-neutral-700">
+            ยืนยันยกเลิกคำสั่งซื้อนี้?{" "}
+            {order.status === "paid" && "เงินที่ชำระไปแล้วจะคืนให้ (เดโม)"}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={loading}
+              onClick={() =>
+                run(async () => {
+                  await call(`/api/orders/${order.id}/cancel`);
+                  setShowCancelConfirm(false);
+                })
+              }
+            >
+              ยืนยันยกเลิก
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setShowCancelConfirm(false)}>
+              ไม่ยกเลิก
+            </Button>
+          </div>
         </div>
       )}
     </div>

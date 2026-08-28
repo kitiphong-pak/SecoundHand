@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapOrder } from "@/lib/mappers";
 import { generateOtp, SELLER_OTP_WINDOW_MS } from "@/lib/orderTiming";
+import { logAction } from "@/lib/auditLog";
 
 export async function POST(
   _req: Request,
@@ -35,6 +36,15 @@ export async function POST(
     .select()
     .single();
   if (error || !updated) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+
+  await logAction({
+    actorId: user.id,
+    actorRole: user.role,
+    actorName: user.name,
+    action: "order.buyer_confirmed",
+    targetType: "order",
+    targetId: order.id,
+  });
 
   return NextResponse.json({ order: mapOrder(updated) });
 }

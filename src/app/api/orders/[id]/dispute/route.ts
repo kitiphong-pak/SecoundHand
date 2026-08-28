@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapOrder } from "@/lib/mappers";
 import { DISPUTE_GRACE_MS } from "@/lib/orderTiming";
+import { logAction } from "@/lib/auditLog";
 
 export async function POST(
   req: Request,
@@ -45,6 +46,16 @@ export async function POST(
     .select()
     .single();
   if (error || !updated) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+
+  await logAction({
+    actorId: user.id,
+    actorRole: user.role,
+    actorName: user.name,
+    action: "order.disputed",
+    targetType: "order",
+    targetId: order.id,
+    metadata: { reason },
+  });
 
   return NextResponse.json({ order: mapOrder(updated) });
 }

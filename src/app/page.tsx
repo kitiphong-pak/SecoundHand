@@ -8,6 +8,7 @@ import { ProductCard } from "@/components/ProductCard";
 export default async function HomePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (user.role === "admin") redirect("/admin");
 
   // ฟีเจอร์หลัก: กรองสินค้าตามจังหวัดของผู้ใช้งานโดยอัตโนมัติ
   const { data: rows } = await supabase

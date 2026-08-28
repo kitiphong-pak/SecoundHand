@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapProduct, mapOrder } from "@/lib/mappers";
+import { logAction } from "@/lib/auditLog";
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "ไม่ได้เข้าสู่ระบบ" }, { status: 401 });
+  if (user.role === "admin") {
+    return NextResponse.json({ error: "แอดมินไม่สามารถซื้อสินค้าได้" }, { status: 403 });
+  }
 
   const body = await req.json().catch(() => null);
   const productId = String(body?.productId ?? "");
@@ -42,5 +46,16 @@ export async function POST(req: Request) {
 
   await supabase.from("products").update({ status: "reserved" }).eq("id", product.id);
 
-  return NextResponse.json({ order: mapOrder(orderRow) }, { status: 201 });
+  const order = mapOrder(orderRow);
+  await logAction({
+    actorId: user.id,
+    actorRole: user.role,
+    actorName: user.name,
+    action: "order.created",
+    targetType: "order",
+    targetId: order.id,
+    metadata: { amount: order.amount },
+  });
+
+  return NextResponse.json({ order }, { status: 201 });
 }

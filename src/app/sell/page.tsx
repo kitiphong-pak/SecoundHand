@@ -6,6 +6,7 @@ import { SellForm } from "@/components/SellForm";
 export default async function SellPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (user.role === "admin") redirect("/admin");
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-neutral-50">

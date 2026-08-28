@@ -1,7 +1,9 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapProduct } from "@/lib/mappers";
+import { getUserRating } from "@/lib/rating";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
 import { BuyButton } from "@/components/BuyButton";
@@ -18,6 +20,7 @@ export default async function ProductDetailPage({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (user.role === "admin") redirect("/admin");
 
   const { id } = await params;
   const { data: productRow } = await supabase.from("products").select("*").eq("id", id).maybeSingle();
@@ -30,6 +33,8 @@ export default async function ProductDetailPage({
     .select("name, is_verified")
     .eq("id", product.sellerId)
     .maybeSingle();
+
+  const rating = await getUserRating(product.sellerId);
 
   // สถานะ "reserved" อยู่ได้หลายจุดใน order flow — ต้องดูสถานะออเดอร์จริง ไม่งั้นจะค้าง
   // โชว์ "รอชำระเงิน" ทั้งที่จ่ายเงิน/ส่งของไปแล้ว (บั๊กเดียวกับที่เจอในหน้าสินค้าของฉัน)
@@ -79,10 +84,16 @@ export default async function ProductDetailPage({
           </p>
 
           {seller && (
-            <div className="mt-4 flex items-center justify-between rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4">
+            <Link
+              href={`/sellers/${product.sellerId}`}
+              className="mt-4 flex items-center justify-between rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4 hover:shadow-sm"
+            >
               <div>
                 <p className="text-sm font-medium text-neutral-900">{seller.name}</p>
-                <p className="mt-1">
+                <p className="mt-1 text-xs text-neutral-500">
+                  {rating.avg !== null ? `⭐ ${rating.avg.toFixed(1)} (${rating.count} รีวิว)` : "ยังไม่มีรีวิว"}
+                </p>
+                <p className="mt-1.5">
                   {seller.is_verified ? (
                     <Badge status="success">ยืนยันตัวตนแล้ว ✅</Badge>
                   ) : (
@@ -90,7 +101,8 @@ export default async function ProductDetailPage({
                   )}
                 </p>
               </div>
-            </div>
+              <span className="text-xs text-neutral-400">ดูโปรไฟล์ →</span>
+            </Link>
           )}
 
           <div className="mt-4 flex gap-3">

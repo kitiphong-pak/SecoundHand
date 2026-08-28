@@ -10,6 +10,7 @@ export function getOrderActivityAt(order: Order): string {
     order.buyerConfirmedAt,
     order.completedAt,
     order.disputeOpenedAt,
+    order.cancelledAt,
   ].filter((t): t is string => !!t);
   return timestamps.reduce((latest, t) => (t > latest ? t : latest), order.createdAt);
 }

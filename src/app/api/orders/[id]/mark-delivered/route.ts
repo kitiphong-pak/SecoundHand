@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapOrder } from "@/lib/mappers";
+import { logAction } from "@/lib/auditLog";
 
 export async function POST(
   _req: Request,
@@ -32,6 +33,15 @@ export async function POST(
     .select()
     .single();
   if (error || !updated) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+
+  await logAction({
+    actorId: user.id,
+    actorRole: user.role,
+    actorName: user.name,
+    action: "order.delivered",
+    targetType: "order",
+    targetId: order.id,
+  });
 
   return NextResponse.json({ order: mapOrder(updated) });
 }

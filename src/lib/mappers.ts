@@ -1,4 +1,4 @@
-import type { User, Product, Order, ChatMessage } from "@/types";
+import type { User, Product, Order, ChatMessage, Review } from "@/types";
 
 // Supabase/Postgres ใช้ชื่อคอลัมน์แบบ snake_case แต่โค้ดแอปทั้งหมด (components, pages)
 // ใช้ camelCase ตาม type ใน @/types — ฟังก์ชันพวกนี้แปลง row จาก Supabase ให้เป็น
@@ -49,6 +49,19 @@ export function mapOrder(row: Record<string, unknown>): Order {
     completedAt: (row.completed_at as string | null) ?? undefined,
     disputeReason: (row.dispute_reason as string | null) ?? undefined,
     disputeOpenedAt: (row.dispute_opened_at as string | null) ?? undefined,
+    cancelledAt: (row.cancelled_at as string | null) ?? undefined,
+    createdAt: row.created_at as string,
+  };
+}
+
+export function mapReview(row: Record<string, unknown>): Review {
+  return {
+    id: row.id as string,
+    orderId: row.order_id as string,
+    fromUserId: row.from_user_id as string,
+    toUserId: row.to_user_id as string,
+    rating: Number(row.rating),
+    comment: row.comment as string,
     createdAt: row.created_at as string,
   };
 }

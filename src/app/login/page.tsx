@@ -33,7 +33,7 @@ export default function LoginPage() {
         setError(data.error ?? "เกิดข้อผิดพลาด กรุณาลองใหม่");
         return;
       }
-      router.push("/");
+      router.push(data.user.role === "admin" ? "/admin" : "/");
       router.refresh();
     } catch {
       setError("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ");

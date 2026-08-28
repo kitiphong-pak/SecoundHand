@@ -48,6 +48,9 @@ export async function POST(
 ) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "ไม่ได้เข้าสู่ระบบ" }, { status: 401 });
+  if (user.role === "admin") {
+    return NextResponse.json({ error: "แอดมินไม่สามารถแชทซื้อขายได้" }, { status: 403 });
+  }
 
   const { productId } = await params;
   const body = await req.json().catch(() => null);

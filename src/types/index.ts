@@ -41,7 +41,8 @@ export type OrderStatus =
   | "awaiting_buyer_confirmation" // ผู้ขายแจ้งส่งมอบแล้ว กำลังนับเวลารอผู้ซื้อยืนยัน
   | "awaiting_otp_entry" // ผู้ซื้อยืนยันรับของแล้ว ระบบออก OTP รอผู้ขายกรอก
   | "completed" // ปิดการซื้อขาย ปล่อยเงินให้ผู้ขายแล้ว (กรอก OTP ถูก หรือ auto-complete)
-  | "disputed"; // มีข้อพิพาท
+  | "disputed" // มีข้อพิพาท รอแอดมินตัดสิน
+  | "cancelled"; // แอดมินตัดสินข้อพิพาทให้ฝั่งผู้ซื้อ ถือว่ายกเลิก/คืนเงิน (เดโม)
 
 export interface Order {
   id: string;
@@ -57,6 +58,7 @@ export interface Order {
   completedAt?: string;
   disputeReason?: string;
   disputeOpenedAt?: string;
+  cancelledAt?: string; // แอดมินตัดสินให้ฝั่งผู้ซื้อ
   createdAt: string;
 }
 

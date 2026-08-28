@@ -20,6 +20,7 @@ const PRODUCT_STATUS_BADGE: Record<
 export default async function MyListingsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (user.role === "admin") redirect("/admin");
 
   const { data: rows } = await supabase
     .from("products")

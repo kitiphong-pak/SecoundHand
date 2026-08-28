@@ -12,7 +12,7 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "ไม่ได้เข้าสู่ระบบ" }, { status: 401 });
 
-  const [{ data: unreadRows }, { count: paidAwaitingShipment }, { count: awaitingConfirmation }] =
+  const [{ data: unreadRows }, { count: paidAwaitingShipment }, { count: awaitingConfirmation }, { count: openDisputes }] =
     await Promise.all([
       supabase
         .from("chat_messages")
@@ -29,6 +29,10 @@ export async function GET() {
         .select("*", { count: "exact", head: true })
         .eq("buyer_id", user.id)
         .eq("status", "awaiting_buyer_confirmation"),
+      // นับข้อพิพาทที่ค้างเฉพาะแอดมิน — user ทั่วไปไม่ต้อง query ตารางนี้เลย
+      user.role === "admin"
+        ? supabase.from("orders").select("*", { count: "exact", head: true }).eq("status", "disputed")
+        : Promise.resolve({ count: 0 }),
     ]);
 
   const unreadThreadKeys = new Set(
@@ -39,5 +43,6 @@ export async function GET() {
     unreadChats: unreadThreadKeys.size,
     paidAwaitingShipment: paidAwaitingShipment ?? 0,
     awaitingConfirmation: awaitingConfirmation ?? 0,
+    openDisputes: openDisputes ?? 0,
   });
 }

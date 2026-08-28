@@ -32,6 +32,11 @@ export async function POST(
     return NextResponse.json({ error: "รหัส OTP ไม่ถูกต้อง" }, { status: 400 });
   }
 
-  const updated = await completeOrder(order.id, order.productId);
+  const updated = await completeOrder(
+    order.id,
+    order.productId,
+    { id: user.id, role: user.role, name: user.name },
+    "otp"
+  );
   return NextResponse.json({ order: updated });
 }
