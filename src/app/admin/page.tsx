@@ -107,6 +107,22 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+// รูปร่างผลลัพธ์ของฟังก์ชัน aggregate ฝั่ง Postgres (ดู
+// supabase/migrations/009_admin_aggregate_functions.sql) — โปรเจกต์นี้ไม่ได้ generate type
+// จาก schema เลยต้องประกาศเองตรงนี้ ให้ตรงกับ `returns table (...)` ของแต่ละฟังก์ชัน
+interface OrderStatusCountRow {
+  status: string;
+  cnt: number;
+}
+interface GmvDailyRow {
+  day: string;
+  total: number;
+}
+interface ReviewStatsRow {
+  cnt: number;
+  avg_rating: number | null;
+}
+
 export default async function AdminDashboardPage() {
   const nowDate = new Date();
   const now = nowDate.toISOString();
@@ -118,10 +134,11 @@ export default async function AdminDashboardPage() {
     { count: totalProducts },
     { count: listedProducts },
     { count: soldProducts },
-    orderStatusCounts,
+    { data: orderStatusRows },
     { data: newOrderRows },
-    { data: completedOrderRows },
-    { data: reviewRatings },
+    { data: gmvTotalRow },
+    { data: gmvDailyRows },
+    { data: reviewStatsRows },
     { count: overdueOtpCount },
     { count: overdueBuyerConfirmCount },
     { count: disputedCount },
@@ -132,18 +149,17 @@ export default async function AdminDashboardPage() {
     supabase.from("products").select("*", { count: "exact", head: true }),
     supabase.from("products").select("*", { count: "exact", head: true }).eq("status", "listed"),
     supabase.from("products").select("*", { count: "exact", head: true }).eq("status", "sold"),
-    Promise.all(
-      ORDER_STATUSES.map((status) =>
-        supabase
-          .from("orders")
-          .select("*", { count: "exact", head: true })
-          .eq("status", status)
-          .then((r) => ({ status, count: r.count ?? 0 }))
-      )
-    ),
+    // นับออเดอร์แยกตามสถานะด้วย 1 query ฝั่ง Postgres (group by) แทนที่จะยิง count query
+    // แยกทีละสถานะ 7 รอบแบบเดิม — ดู supabase/migrations/009_admin_aggregate_functions.sql
+    supabase.rpc("admin_order_status_counts") as unknown as Promise<{ data: OrderStatusCountRow[] | null }>,
     supabase.from("orders").select("created_at").gte("created_at", FOURTEEN_DAYS_AGO),
-    supabase.from("orders").select("amount, completed_at").eq("status", "completed"),
-    supabase.from("reviews").select("rating"),
+    // ยอดขายรวม (lifetime) คำนวณฝั่ง Postgres แทนการดึงออเดอร์ completed ทุกแถวมาบวกเองใน JS
+    supabase.rpc("admin_gmv_total") as unknown as Promise<{ data: number | null }>,
+    // ยอดขายรายวัน 14 วันล่าสุด — เท่ากับข้อมูลไม่กี่แถว แทนที่จะดึงออเดอร์ completed ทั้งหมด
+    // มา filter/bucket เองใน JS เหมือนเดิม
+    supabase.rpc("admin_gmv_daily", { since: FOURTEEN_DAYS_AGO }) as unknown as Promise<{ data: GmvDailyRow[] | null }>,
+    // จำนวนรีวิว + คะแนนเฉลี่ยทั้งระบบ คำนวณฝั่ง Postgres แทนการดึง rating ทุกแถวมาเฉลี่ยเอง
+    supabase.rpc("admin_review_stats") as unknown as Promise<{ data: ReviewStatsRow[] | null }>,
     supabase
       .from("orders")
       .select("*", { count: "exact", head: true })
@@ -158,22 +174,27 @@ export default async function AdminDashboardPage() {
     fetchDisplayLogs({ page: 1, pageSize: 6 }),
   ]);
 
+  // admin_order_status_counts() คืนมาแค่สถานะที่มีออเดอร์อยู่จริงอย่างน้อย 1 รายการ ต้องเติม 0
+  // ให้สถานะที่เหลือเองเพื่อให้กราฟแท่งแสดงครบทุกสถานะเสมอเหมือนพฤติกรรมเดิม
+  const countByStatus = new Map((orderStatusRows ?? []).map((r) => [r.status, Number(r.cnt)]));
+  const orderStatusCounts = ORDER_STATUSES.map((status) => ({
+    status,
+    count: countByStatus.get(status) ?? 0,
+  }));
   const totalOrders = orderStatusCounts.reduce((sum, s) => sum + s.count, 0);
-  // รวมยอดจาก order ที่ completed แล้วเท่านั้น — ยังพอไหวสำหรับสเกลปัจจุบัน แต่ถ้าจำนวน
-  // ออเดอร์เยอะขึ้นมากในอนาคต ควรเปลี่ยนไปใช้ aggregate query (sum) ฝั่ง Postgres แทนการ
-  // ดึงทุกแถวมาบวกฝั่ง JS แบบนี้
-  const gmv = (completedOrderRows ?? []).reduce((sum, o) => sum + Number(o.amount), 0);
-  const reviewCount = reviewRatings?.length ?? 0;
-  const avgRating =
-    reviewCount > 0 ? reviewRatings!.reduce((sum, r) => sum + r.rating, 0) / reviewCount : null;
+
+  const gmv = Number(gmvTotalRow ?? 0);
+  const reviewStats = reviewStatsRows?.[0];
+  const reviewCount = Number(reviewStats?.cnt ?? 0);
+  const avgRating = reviewStats?.avg_rating != null ? Number(reviewStats.avg_rating) : null;
 
   const userTrend = bucketDaily(newUserRows ?? [], TREND_DAYS, (r) => r.created_at);
   const orderTrend = bucketDaily(newOrderRows ?? [], TREND_DAYS, (r) => r.created_at);
   const gmvTrend = bucketDaily(
-    (completedOrderRows ?? []).filter((r): r is { amount: number; completed_at: string } => !!r.completed_at),
+    gmvDailyRows ?? [],
     TREND_DAYS,
-    (r) => r.completed_at,
-    (r) => Number(r.amount)
+    (r) => r.day,
+    (r) => Number(r.total)
   );
   const gmvLast14d = gmvTrend.reduce((sum, v) => sum + v, 0);
 

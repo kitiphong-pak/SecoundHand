@@ -31,7 +31,8 @@ export default async function SellerProfilePage({
       .select("*")
       .eq("seller_id", id)
       .eq("status", "listed")
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(200),
     supabase.from("reviews").select("*").eq("to_user_id", id).order("created_at", { ascending: false }).limit(20),
     getUserRating(id),
   ]);

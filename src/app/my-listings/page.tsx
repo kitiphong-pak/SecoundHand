@@ -27,7 +27,8 @@ export default async function MyListingsPage() {
     .from("products")
     .select("*")
     .eq("seller_id", user.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(200);
   const products = (rows ?? []).map(mapProduct);
 
   // สินค้าสถานะ "reserved" อยู่ได้หลายจุดใน order flow (รอชำระ/ชำระแล้ว/รอส่งมอบ/รอ OTP)
