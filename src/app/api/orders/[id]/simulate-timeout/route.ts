@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapOrder } from "@/lib/mappers";
-import { completeOrder } from "@/lib/orderCompletion";
+import { completeOrder, OrderStateConflictError } from "@/lib/orderCompletion";
 
 // เดโมเท่านั้น: จำลองว่าเวลาผ่านไปจนครบกำหนด แล้ว "เงียบ = ยอมรับ" ตามหลักการที่ออกแบบไว้
 // เพื่อให้ทดสอบ flow auto-complete ได้โดยไม่ต้องรอ 3 วัน/24 ชม. จริง
@@ -22,25 +22,27 @@ export async function POST(
     return NextResponse.json({ error: "ไม่มีสิทธิ์ทำรายการนี้" }, { status: 403 });
   }
 
-  if (order.status === "awaiting_buyer_confirmation") {
-    // เกินกำหนดไม่ตอบสนอง → ระบบยืนยันแทนอัตโนมัติ → ข้ามไปปิดการซื้อขายทันที
-    const updated = await completeOrder(
-      order.id,
-      order.productId,
-      { id: user.id, role: user.role, name: user.name },
-      "timeout"
-    );
-    return NextResponse.json({ order: updated });
-  } else if (order.status === "awaiting_otp_entry") {
-    // เกิน 24 ชม. ผู้ขายไม่กรอก OTP → ระบบปิดอัตโนมัติแทน (ผู้ซื้อยืนยันไปแล้วตั้งแต่ก่อนหน้า)
-    const updated = await completeOrder(
-      order.id,
-      order.productId,
-      { id: user.id, role: user.role, name: user.name },
-      "timeout"
-    );
-    return NextResponse.json({ order: updated });
-  } else {
+  if (order.status !== "awaiting_buyer_confirmation" && order.status !== "awaiting_otp_entry") {
     return NextResponse.json({ error: "ออเดอร์นี้ไม่อยู่ในสถานะที่รอ timeout" }, { status: 409 });
+  }
+
+  try {
+    // เกินกำหนดไม่ตอบสนอง → ระบบยืนยันแทนอัตโนมัติ → ข้ามไปปิดการซื้อขายทันที (ทั้งสองสถานะ
+    // ใช้ logic เดียวกัน แค่คนละเหตุผลที่ทำให้ระบบตัดสินใจแทน)
+    const updated = await completeOrder(
+      order.id,
+      order.productId,
+      { id: user.id, role: user.role, name: user.name },
+      "timeout"
+    );
+    return NextResponse.json({ order: updated });
+  } catch (e) {
+    if (e instanceof OrderStateConflictError) {
+      return NextResponse.json(
+        { error: "ออเดอร์นี้ถูกดำเนินการไปแล้ว กรุณารีเฟรชหน้า" },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: "ปิดออเดอร์ไม่สำเร็จ" }, { status: 500 });
   }
 }

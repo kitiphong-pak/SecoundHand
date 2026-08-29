@@ -43,9 +43,18 @@ export async function POST(
       dispute_opened_at: new Date().toISOString(),
     })
     .eq("id", id)
+    // ต้องยังอยู่ในสถานะเดียวกับตอนเช็คด้านบนจริงๆ — กันเช่น cron ปิดออเดอร์ (completed) ไปแล้ว
+    // ระหว่างที่ผู้ซื้อกำลังส่งฟอร์มเปิดข้อพิพาทพอดี
+    .in("status", ["completed", "awaiting_buyer_confirmation", "awaiting_otp_entry"])
     .select()
-    .single();
-  if (error || !updated) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+  if (!updated) {
+    return NextResponse.json(
+      { error: "สถานะออเดอร์เปลี่ยนไปแล้ว กรุณารีเฟรชหน้า" },
+      { status: 409 }
+    );
+  }
 
   await logAction({
     actorId: user.id,

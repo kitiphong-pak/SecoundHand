@@ -22,11 +22,26 @@ export async function POST(req: Request) {
   if (!productRow) return NextResponse.json({ error: "ไม่พบสินค้านี้" }, { status: 404 });
 
   const product = mapProduct(productRow);
-  if (product.status !== "listed") {
-    return NextResponse.json({ error: "สินค้านี้ไม่พร้อมขายแล้ว" }, { status: 409 });
-  }
   if (product.sellerId === user.id) {
     return NextResponse.json({ error: "ไม่สามารถซื้อสินค้าของตัวเองได้" }, { status: 400 });
+  }
+
+  // "จอง" สินค้าก่อนสร้างออเดอร์เสมอ โดยเขียนแบบมีเงื่อนไข status="listed" กำกับไว้ด้วย —
+  // ถ้าสองคนกดซื้อพร้อมกัน มีแค่คนแรกเท่านั้นที่ UPDATE นี้จะโดนแถวจริง อีกคนจะได้ 0 แถวกลับมา
+  // (ไม่ error แต่ก็ไม่ใช่ "จองสำเร็จ") ต่างจากเดิมที่เช็ค status ใน JS ก่อนแล้วค่อยเขียนทีหลัง
+  // ซึ่งเปิดช่องให้ทั้งสอง request อ่านเห็น "listed" พร้อมกันแล้วสร้างออเดอร์ซ้ำได้ทั้งคู่
+  const { data: reservedProduct, error: reserveError } = await supabase
+    .from("products")
+    .update({ status: "reserved" })
+    .eq("id", product.id)
+    .eq("status", "listed")
+    .select()
+    .maybeSingle();
+  if (reserveError) {
+    return NextResponse.json({ error: "สร้างออเดอร์ไม่สำเร็จ" }, { status: 500 });
+  }
+  if (!reservedProduct) {
+    return NextResponse.json({ error: "สินค้านี้ไม่พร้อมขายแล้ว" }, { status: 409 });
   }
 
   const { data: orderRow, error } = await supabase
@@ -41,10 +56,11 @@ export async function POST(req: Request) {
     .select()
     .single();
   if (error || !orderRow) {
+    // จองสินค้าไปแล้วแต่สร้างออเดอร์ไม่สำเร็จ — คืนสถานะกลับเป็น listed ไม่งั้นสินค้าจะค้าง
+    // "reserved" ตลอดไปทั้งที่ไม่มีออเดอร์จริงรองรับเลย
+    await supabase.from("products").update({ status: "listed" }).eq("id", product.id);
     return NextResponse.json({ error: "สร้างออเดอร์ไม่สำเร็จ" }, { status: 500 });
   }
-
-  await supabase.from("products").update({ status: "reserved" }).eq("id", product.id);
 
   const order = mapOrder(orderRow);
   await logAction({

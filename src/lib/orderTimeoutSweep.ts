@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { completeOrder } from "@/lib/orderCompletion";
+import { completeOrder, OrderStateConflictError } from "@/lib/orderCompletion";
 import { BUYER_CONFIRM_WINDOW_MS } from "@/lib/orderTiming";
 
 // ผู้ใช้ระบบสำหรับแปะเป็น actor ของ audit log เมื่อ action เกิดจาก cron ไม่ใช่คนกดจริง
@@ -33,8 +33,15 @@ export async function processOrderTimeouts(): Promise<{ completedOrderIds: strin
   const overdue = [...(overdueConfirmations ?? []), ...(overdueOtp ?? [])];
   const completedOrderIds: string[] = [];
   for (const o of overdue) {
-    await completeOrder(o.id, o.product_id, SYSTEM_ACTOR, "timeout");
-    completedOrderIds.push(o.id);
+    try {
+      await completeOrder(o.id, o.product_id, SYSTEM_ACTOR, "timeout");
+      completedOrderIds.push(o.id);
+    } catch (e) {
+      // มีคำขออื่น (เช่นผู้ใช้กด verify-otp/simulate-timeout เอง) แซงไปปิดออเดอร์นี้ก่อนแล้ว
+      // พอดีตอน sweep รอบนี้กำลังจะจัดการ — ไม่ใช่ error จริง ข้ามไปกวาดออเดอร์ถัดไปได้เลย
+      if (e instanceof OrderStateConflictError) continue;
+      throw e;
+    }
   }
   return { completedOrderIds };
 }

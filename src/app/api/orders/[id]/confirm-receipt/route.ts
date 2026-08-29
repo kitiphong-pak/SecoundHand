@@ -33,9 +33,18 @@ export async function POST(
       otp_expires_at: new Date(Date.now() + SELLER_OTP_WINDOW_MS).toISOString(),
     })
     .eq("id", id)
+    // กัน race กับ cron/simulate-timeout ที่อาจปิดออเดอร์นี้ไปแล้วพอดีตอนใกล้ครบกำหนด
+    // ไม่งั้นจะเผลอเขียนสถานะทับ "completed" กลับไปเป็น "awaiting_otp_entry" ได้
+    .eq("status", "awaiting_buyer_confirmation")
     .select()
-    .single();
-  if (error || !updated) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+  if (!updated) {
+    return NextResponse.json(
+      { error: "ออเดอร์นี้ไม่อยู่ในสถานะที่ยืนยันได้แล้ว กรุณารีเฟรชหน้า" },
+      { status: 409 }
+    );
+  }
 
   await logAction({
     actorId: user.id,

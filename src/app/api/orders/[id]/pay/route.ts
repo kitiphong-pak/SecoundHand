@@ -28,9 +28,13 @@ export async function POST(
     .from("orders")
     .update({ status: "paid" })
     .eq("id", id)
+    .eq("status", "pending_payment") // กัน request ซ้อนเขียนทับกันถ้าชำระเงินสำเร็จไปแล้วพอดี
     .select()
-    .single();
-  if (error || !updated) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+  if (!updated) {
+    return NextResponse.json({ error: "ออเดอร์นี้ชำระเงินไปแล้ว" }, { status: 409 });
+  }
 
   await logAction({
     actorId: user.id,

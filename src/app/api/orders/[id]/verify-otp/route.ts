@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapOrder } from "@/lib/mappers";
-import { completeOrder } from "@/lib/orderCompletion";
+import { completeOrder, OrderStateConflictError } from "@/lib/orderCompletion";
 
 export async function POST(
   req: Request,
@@ -32,11 +32,22 @@ export async function POST(
     return NextResponse.json({ error: "รหัส OTP ไม่ถูกต้อง" }, { status: 400 });
   }
 
-  const updated = await completeOrder(
-    order.id,
-    order.productId,
-    { id: user.id, role: user.role, name: user.name },
-    "otp"
-  );
-  return NextResponse.json({ order: updated });
+  try {
+    const updated = await completeOrder(
+      order.id,
+      order.productId,
+      { id: user.id, role: user.role, name: user.name },
+      "otp"
+    );
+    return NextResponse.json({ order: updated });
+  } catch (e) {
+    if (e instanceof OrderStateConflictError) {
+      // ระบบปิดออเดอร์นี้ไปแล้ว (เช่น cron timeout เข้ามาพอดี) ระหว่างที่กำลังตรวจ OTP อยู่
+      return NextResponse.json(
+        { error: "ออเดอร์นี้ถูกปิดไปแล้ว กรุณารีเฟรชหน้า" },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: "ปิดออเดอร์ไม่สำเร็จ" }, { status: 500 });
+  }
 }

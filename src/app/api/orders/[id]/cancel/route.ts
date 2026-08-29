@@ -32,9 +32,17 @@ export async function POST(
     .from("orders")
     .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
     .eq("id", id)
+    // กัน request ซ้อน เช่นผู้ขายเพิ่งกดแจ้งส่งมอบไปพอดีตอนผู้ซื้อกดยกเลิก
+    .in("status", ["pending_payment", "paid"])
     .select()
-    .single();
-  if (error || !updated) return NextResponse.json({ error: "ยกเลิกไม่สำเร็จ" }, { status: 500 });
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: "ยกเลิกไม่สำเร็จ" }, { status: 500 });
+  if (!updated) {
+    return NextResponse.json(
+      { error: "ไม่สามารถยกเลิกออเดอร์นี้ได้แล้ว (สถานะเปลี่ยนไปแล้ว)" },
+      { status: 409 }
+    );
+  }
 
   await supabase.from("products").update({ status: "listed" }).eq("id", order.productId);
 

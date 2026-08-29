@@ -39,9 +39,16 @@ export async function POST(
         completed_at: order.completedAt ?? new Date().toISOString(),
       })
       .eq("id", id)
+      .eq("status", "disputed") // กัน admin สองคนตัดสินข้อพิพาทเดียวกันซ้อนกัน
       .select()
-      .single();
-    if (error || !updated) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+    if (!updated) {
+      return NextResponse.json(
+        { error: "ข้อพิพาทนี้ถูกตัดสินไปแล้วโดยแอดมินคนอื่น" },
+        { status: 409 }
+      );
+    }
 
     await supabase.from("products").update({ status: "sold" }).eq("id", order.productId);
     await logAction({
@@ -61,9 +68,16 @@ export async function POST(
     .from("orders")
     .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
     .eq("id", id)
+    .eq("status", "disputed") // กัน admin สองคนตัดสินข้อพิพาทเดียวกันซ้อนกัน
     .select()
-    .single();
-  if (error || !updated) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+  if (!updated) {
+    return NextResponse.json(
+      { error: "ข้อพิพาทนี้ถูกตัดสินไปแล้วโดยแอดมินคนอื่น" },
+      { status: 409 }
+    );
+  }
 
   await supabase.from("products").update({ status: "listed" }).eq("id", order.productId);
   await logAction({

@@ -30,9 +30,13 @@ export async function POST(
       seller_marked_delivered_at: new Date().toISOString(),
     })
     .eq("id", id)
+    .eq("status", "paid") // กัน request ซ้อนแจ้งส่งมอบซ้ำถ้าสถานะเปลี่ยนไปแล้ว
     .select()
-    .single();
-  if (error || !updated) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
+  if (!updated) {
+    return NextResponse.json({ error: "ออเดอร์นี้ยังไม่พร้อมแจ้งส่งมอบ" }, { status: 409 });
+  }
 
   await logAction({
     actorId: user.id,
