@@ -44,7 +44,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           {THEME_INIT_SCRIPT}
         </Script>
       </head>
-      <body className="min-h-full flex flex-col bg-neutral-50 text-neutral-900">{children}</body>
+      {/* pb-14 กันเนื้อหาโดนแถบเมนูมือถือแบบ fixed ที่ด้านล่างบัง (ดู Header.tsx) — ไม่มีผลกับ
+          หน้าที่ไม่มี Header อย่าง /login เพราะแค่เป็นที่ว่างเปล่าเพิ่มด้านล่าง ไม่กระทบ layout */}
+      <body className="min-h-full flex flex-col bg-neutral-50 text-neutral-900 pb-14 sm:pb-0">{children}</body>
     </html>
   );
 }
