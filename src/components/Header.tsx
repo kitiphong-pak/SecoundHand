@@ -13,7 +13,6 @@ interface Badges {
 
 const NAV_LINKS: Array<{ href: string; label: string; badgeKey: keyof Badges | null }> = [
   { href: "/", label: "หน้าแรก", badgeKey: null },
-  { href: "/sell", label: "ลงขายสินค้า", badgeKey: null },
   { href: "/my-listings", label: "สินค้าของฉัน", badgeKey: "paidAwaitingShipment" },
   { href: "/orders", label: "ออเดอร์ของฉัน", badgeKey: "awaitingConfirmation" },
   { href: "/chat", label: "แชท", badgeKey: "unreadChats" },
