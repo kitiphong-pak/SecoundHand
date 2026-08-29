@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 export type AuditAction =
   | "user.registered"
   | "product.listed"
+  | "product.removed"
   | "order.created"
   | "order.paid"
   | "order.delivered"
@@ -17,6 +18,7 @@ export type AuditAction =
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   "user.registered": "สมัครสมาชิกใหม่",
   "product.listed": "ลงขายสินค้า",
+  "product.removed": "ลบประกาศสินค้า",
   "order.created": "สร้างออเดอร์",
   "order.paid": "ชำระเงิน",
   "order.delivered": "แจ้งส่งมอบสินค้า",

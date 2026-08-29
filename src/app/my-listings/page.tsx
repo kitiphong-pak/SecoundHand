@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { mapProduct } from "@/lib/mappers";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
+import { RemoveListingButton } from "@/components/RemoveListingButton";
 import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
 import type { OrderStatus } from "@/types";
 
@@ -60,8 +61,17 @@ export default async function MyListingsPage() {
         </div>
 
         {products.length === 0 ? (
-          <div className="mt-10 rounded-[var(--radius-lg)] border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-500">
-            คุณยังไม่มีสินค้าลงขาย
+          <div className="mt-10 flex flex-col items-center gap-3 rounded-[var(--radius-lg)] border border-dashed border-neutral-300 py-16 text-center">
+            <p className="text-sm text-neutral-500">คุณยังไม่มีสินค้าลงขาย</p>
+            <p className="max-w-xs text-xs text-neutral-400">
+              ลงขายสินค้าชิ้นแรกได้ง่ายๆ แค่ถ่ายรูป ตั้งราคา แล้วรอผู้ซื้อในจังหวัดของคุณติดต่อมา
+            </p>
+            <Link
+              href="/sell"
+              className="mt-1 rounded-[var(--radius-md)] bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600"
+            >
+              + ลงขายสินค้าชิ้นแรกของคุณ
+            </Link>
           </div>
         ) : (
           <div className="mt-5 flex flex-col gap-3">
@@ -71,19 +81,23 @@ export default async function MyListingsPage() {
                   ? ORDER_STATUS_LABEL[statusByProduct.get(product.id) ?? "pending_payment"]
                   : PRODUCT_STATUS_BADGE[product.status];
               return (
-                <Link
+                <div
                   key={product.id}
-                  href={`/products/${product.id}`}
                   className="flex items-center justify-between rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4 hover:shadow-sm"
                 >
-                  <div>
+                  <Link href={`/products/${product.id}`} className="flex-1">
                     <p className="text-sm font-medium text-neutral-900">{product.title}</p>
                     <p className="mt-1 text-xs text-neutral-500">
                       ฿{product.price.toLocaleString("th-TH")}
                     </p>
+                  </Link>
+                  <div className="flex items-center gap-3">
+                    {badge && <Badge status={badge.status}>{badge.label}</Badge>}
+                    {product.status === "listed" && (
+                      <RemoveListingButton productId={product.id} />
+                    )}
                   </div>
-                  {badge && <Badge status={badge.status}>{badge.label}</Badge>}
-                </Link>
+                </div>
               );
             })}
           </div>
