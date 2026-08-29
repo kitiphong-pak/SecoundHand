@@ -17,6 +17,7 @@ export interface DisplayLogEntry {
   actionLabel: string;
   productTitle: string | null;
   disputeReason: string | null;
+  orderId: string | null;
   createdAt: string;
 }
 
@@ -130,6 +131,7 @@ export async function fetchDisplayLogs(filters: LogFilters): Promise<LogPage> {
       actionLabel: AUDIT_ACTION_LABEL[log.action as AuditAction] ?? log.action,
       productTitle,
       disputeReason,
+      orderId: log.target_type === "order" ? log.target_id : null,
       createdAt: log.created_at,
     };
   });

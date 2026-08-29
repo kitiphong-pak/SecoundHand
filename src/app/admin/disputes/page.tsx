@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { mapOrder } from "@/lib/mappers";
 import { DisputeResolutionButtons } from "@/components/DisputeResolutionButtons";
@@ -41,17 +42,25 @@ export default async function AdminDisputesPage() {
               key={order.id}
               className="rounded-[var(--radius-lg)] border border-error-500/30 bg-white p-4"
             >
-              <div>
-                <p className="text-sm font-medium text-neutral-900">
-                  {titleByProduct.get(order.productId) ?? "สินค้าไม่พบ"}
-                </p>
-                <p className="mt-1 text-xs text-neutral-500">
-                  ผู้ซื้อ: {nameByUser.get(order.buyerId) ?? "ไม่พบ"} · ผู้ขาย:{" "}
-                  {nameByUser.get(order.sellerId) ?? "ไม่พบ"}
-                </p>
-                <p className="mt-1 text-xs text-neutral-400">
-                  ยอด ฿{order.amount.toLocaleString("th-TH")}
-                </p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-neutral-900">
+                    {titleByProduct.get(order.productId) ?? "สินค้าไม่พบ"}
+                  </p>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    ผู้ซื้อ: {nameByUser.get(order.buyerId) ?? "ไม่พบ"} · ผู้ขาย:{" "}
+                    {nameByUser.get(order.sellerId) ?? "ไม่พบ"}
+                  </p>
+                  <p className="mt-1 text-xs text-neutral-400">
+                    ยอด ฿{order.amount.toLocaleString("th-TH")}
+                  </p>
+                </div>
+                <Link
+                  href={`/admin/orders/${order.id}`}
+                  className="flex-none text-xs text-primary-600 hover:underline"
+                >
+                  ดูรายละเอียด →
+                </Link>
               </div>
 
               {order.disputeReason && (

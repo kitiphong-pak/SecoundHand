@@ -171,6 +171,14 @@ export default async function AdminLogsPage({
                       {log.disputeReason && (
                         <p className="mt-0.5 text-xs text-error-500">เหตุผล: {log.disputeReason}</p>
                       )}
+                      {log.orderId && (
+                        <Link
+                          href={`/admin/orders/${log.orderId}`}
+                          className="mt-0.5 block text-xs text-primary-600 hover:underline"
+                        >
+                          ดูออเดอร์ →
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}
