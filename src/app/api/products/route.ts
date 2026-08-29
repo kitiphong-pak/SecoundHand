@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapProduct } from "@/lib/mappers";
 import { logAction } from "@/lib/auditLog";
+import { isOwnedImageUrl } from "@/lib/storage";
 import type { ProductCondition } from "@/types";
 
 const CONDITIONS: ProductCondition[] = ["new", "like_new", "good", "fair"];
@@ -32,11 +33,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "กรุณาเลือกสภาพสินค้า" }, { status: 400 });
   }
 
-  // ตอนนี้รับเฉพาะ URL ที่อัปโหลดผ่าน /api/upload มาก่อนแล้วเท่านั้น (ไฟล์แยกเก็บใน public/uploads)
-  // ไม่รับ data URL ตรงๆ อีกต่อไป กัน client ที่ข้าม upload endpoint มายัดข้อมูลดิบใส่ record
+  // ตอนนี้รับเฉพาะ URL ที่อัปโหลดผ่าน /api/upload มาก่อนแล้วเท่านั้น (เก็บใน Supabase Storage)
+  // ไม่รับ data URL ตรงๆ อีกต่อไป กัน client ที่ข้ามขั้นตอน upload มายัดข้อมูลดิบใส่ record
   const rawImages = Array.isArray(body?.images) ? body.images : [];
   const images: string[] = rawImages
-    .filter((img: unknown): img is string => typeof img === "string" && img.startsWith("/uploads/"))
+    .filter((img: unknown): img is string => typeof img === "string" && isOwnedImageUrl(img))
     .slice(0, MAX_IMAGES);
 
   const { data: row, error } = await supabase
