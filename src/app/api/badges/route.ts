@@ -12,13 +12,16 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "ไม่ได้เข้าสู่ระบบ" }, { status: 401 });
 
-  const [{ data: unreadRows }, { count: paidAwaitingShipment }, { count: awaitingConfirmation }, { count: openDisputes }] =
+  const [{ count: unreadChats }, { count: paidAwaitingShipment }, { count: awaitingConfirmation }, { count: openDisputes }] =
     await Promise.all([
+      // นับ "ห้องแชท" ที่มีข้อความยังไม่อ่านตรงๆ จาก chat_threads (มีตัวนับ unread เก็บไว้ให้
+      // อยู่แล้ว) แทนที่จะดึงข้อความยังไม่อ่านทุกแถวมา dedupe เป็นห้องเองใน JS แบบเดิม
       supabase
-        .from("chat_messages")
-        .select("product_id, from_user_id")
-        .eq("to_user_id", user.id)
-        .eq("read", false),
+        .from("chat_threads")
+        .select("*", { count: "exact", head: true })
+        .or(
+          `and(seller_id.eq.${user.id},seller_unread_count.gt.0),and(buyer_id.eq.${user.id},buyer_unread_count.gt.0)`
+        ),
       supabase
         .from("orders")
         .select("*", { count: "exact", head: true })
@@ -35,12 +38,8 @@ export async function GET() {
         : Promise.resolve({ count: 0 }),
     ]);
 
-  const unreadThreadKeys = new Set(
-    (unreadRows ?? []).map((r) => `${r.product_id}:${r.from_user_id}`)
-  );
-
   return NextResponse.json({
-    unreadChats: unreadThreadKeys.size,
+    unreadChats: unreadChats ?? 0,
     paidAwaitingShipment: paidAwaitingShipment ?? 0,
     awaitingConfirmation: awaitingConfirmation ?? 0,
     openDisputes: openDisputes ?? 0,

@@ -30,13 +30,14 @@ export async function GET(
 
   const messages = (rows ?? []).map(mapMessage);
 
-  // ทำเครื่องหมายว่าอ่านแล้วเมื่อเปิดดู
-  const unreadIds = messages.filter((m) => m.toUserId === user.id && !m.read).map((m) => m.id);
-  if (unreadIds.length > 0) {
-    await supabase.from("chat_messages").update({ read: true }).in("id", unreadIds);
-    for (const m of messages) {
-      if (unreadIds.includes(m.id)) m.read = true;
-    }
+  // ทำเครื่องหมายว่าอ่านแล้วเมื่อเปิดดู — ผ่าน RPC เดียวที่อัปเดตทั้งข้อความและตัวนับ unread
+  // ของห้องแชทแบบ atomic ในธุรกรรมเดียว (ดู mark_thread_read ใน
+  // supabase/migrations/010_chat_threads.sql) แทนการ update ทีละ query แยกจาก client แบบเดิม
+  const threadId = (rows?.[0] as { thread_id?: string } | undefined)?.thread_id;
+  const hasUnread = messages.some((m) => m.toUserId === user.id && !m.read);
+  if (threadId && hasUnread) {
+    await supabase.rpc("mark_thread_read", { p_thread_id: threadId, p_reader_id: user.id });
+    for (const m of messages) if (m.toUserId === user.id) m.read = true;
   }
 
   return NextResponse.json({ messages });
@@ -67,11 +68,16 @@ export async function POST(
     .maybeSingle();
   if (!productRow) return NextResponse.json({ error: "ไม่พบสินค้านี้" }, { status: 404 });
 
-  const { data: row, error } = await supabase
-    .from("chat_messages")
-    .insert({ product_id: productId, from_user_id: user.id, to_user_id: toUserId, text })
-    .select()
-    .single();
+  // ส่งผ่าน RPC เดียว — หา/สร้างห้องแชทกับ insert ข้อความจริงเกิดขึ้นในธุรกรรมเดียวกันแบบ
+  // atomic กันสองข้อความที่ส่งไล่เลี่ยกันมากแข่งกันอัปเดตตัวนับ unread ของห้องจนนับพลาด (ดู
+  // send_chat_message ใน supabase/migrations/010_chat_threads.sql)
+  const { data, error } = await supabase.rpc("send_chat_message", {
+    p_product_id: productId,
+    p_from_user_id: user.id,
+    p_to_user_id: toUserId,
+    p_text: text,
+  });
+  const row = (data as Record<string, unknown>[] | null)?.[0];
   if (error || !row) return NextResponse.json({ error: "ส่งข้อความไม่สำเร็จ" }, { status: 500 });
 
   return NextResponse.json({ message: mapMessage(row) }, { status: 201 });
