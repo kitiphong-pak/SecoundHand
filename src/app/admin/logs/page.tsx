@@ -62,7 +62,7 @@ export default async function AdminLogsPage({
             id="action"
             name="action"
             defaultValue={action ?? ""}
-            className="rounded-[var(--radius-md)] border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-primary-500"
+            className="rounded-[var(--radius-md)] border border-neutral-300 bg-neutral-0 px-3 py-2 text-sm text-neutral-900 outline-none focus:border-primary-500"
           >
             <option value="">ทุกการกระทำ</option>
             {Object.entries(AUDIT_ACTION_LABEL).map(([key, label]) => (
@@ -141,7 +141,7 @@ export default async function AdminLogsPage({
         </div>
       ) : (
         <>
-          <div className="mt-5 overflow-x-auto rounded-[var(--radius-lg)] border border-neutral-200 bg-white">
+          <div className="mt-5 overflow-x-auto rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-neutral-200 bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
                 <tr>

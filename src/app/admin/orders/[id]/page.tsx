@@ -58,7 +58,7 @@ export default async function AdminOrderDetailPage({
       </div>
 
       <div className="mt-5 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4">
+        <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-4">
           <h2 className="text-sm font-medium text-neutral-900">สินค้า</h2>
           {product ? (
             <div className="mt-3">
@@ -81,7 +81,7 @@ export default async function AdminOrderDetailPage({
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4">
+          <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-4">
             <h2 className="text-sm font-medium text-neutral-900">คู่ซื้อขาย</h2>
             <div className="mt-3 flex flex-col gap-3 text-sm">
               <div>
@@ -97,7 +97,7 @@ export default async function AdminOrderDetailPage({
             </div>
           </div>
 
-          <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4">
+          <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-4">
             <h2 className="text-sm font-medium text-neutral-900">ไทม์ไลน์</h2>
             <ul className="mt-3 flex flex-col gap-2 text-sm">
               {timeline.map((t) => (
@@ -119,7 +119,7 @@ export default async function AdminOrderDetailPage({
           )}
 
           {order.status === "disputed" && (
-            <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4">
+            <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-4">
               <h2 className="text-sm font-medium text-neutral-900">ตัดสินข้อพิพาท</h2>
               <div className="mt-3">
                 <DisputeResolutionButtons orderId={order.id} />

@@ -40,7 +40,7 @@ export default async function AdminDisputesPage() {
           {orders.map((order) => (
             <div
               key={order.id}
-              className="rounded-[var(--radius-lg)] border border-error-500/30 bg-white p-4"
+              className="rounded-[var(--radius-lg)] border border-error-500/30 bg-neutral-0 p-4"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>

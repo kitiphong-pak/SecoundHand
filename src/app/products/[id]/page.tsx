@@ -86,7 +86,7 @@ export default async function ProductDetailPage({
           {seller && (
             <Link
               href={`/sellers/${product.sellerId}`}
-              className="mt-4 flex items-center justify-between rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4 hover:shadow-sm"
+              className="mt-4 flex items-center justify-between rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-4 hover:shadow-sm"
             >
               <div>
                 <p className="text-sm font-medium text-neutral-900">{seller.name}</p>

@@ -8,7 +8,7 @@ export function ProductCard({ product }: { product: Product }) {
   return (
     <Link
       href={`/products/${product.id}`}
-      className="block overflow-hidden rounded-[var(--radius-lg)] border border-neutral-200 bg-white transition-shadow hover:shadow-md"
+      className="block overflow-hidden rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 transition-shadow hover:shadow-md"
     >
       {cover ? (
         <div className="relative h-36 w-full">

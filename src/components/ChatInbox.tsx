@@ -60,7 +60,7 @@ export function ChatInbox() {
         <Link
           key={`${c.productId}:${c.otherUserId}`}
           href={`/chat/${c.productId}?with=${c.otherUserId}`}
-          className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4 hover:shadow-sm"
+          className="flex items-center justify-between gap-3 rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-4 hover:shadow-sm"
         >
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">

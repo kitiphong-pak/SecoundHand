@@ -73,7 +73,7 @@ export function OrderList({ orders }: { orders: OrderRow[] }) {
                   key={order.id}
                   href={`/orders/${order.id}`}
                   onClick={() => markSeen(order)}
-                  className="relative flex items-center justify-between rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4 hover:shadow-sm"
+                  className="relative flex items-center justify-between rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-4 hover:shadow-sm"
                 >
                   {isNew && (
                     <span

@@ -56,7 +56,7 @@ export function ChatThread({
   };
 
   return (
-    <div className="flex flex-1 flex-col rounded-[var(--radius-lg)] border border-neutral-200 bg-white">
+    <div className="flex flex-1 flex-col rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0">
       <div className="border-b border-neutral-100 px-4 py-3 text-sm font-medium text-neutral-900">
         {otherUser.name}
       </div>

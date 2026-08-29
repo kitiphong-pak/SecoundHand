@@ -61,7 +61,7 @@ export default async function OrderDetailPage({
           ← ออเดอร์ทั้งหมด
         </Link>
 
-        <div className="mt-3 rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-5">
+        <div className="mt-3 rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs text-neutral-400">ออเดอร์ #{order.id}</p>

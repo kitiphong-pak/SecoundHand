@@ -83,7 +83,7 @@ export default async function MyListingsPage() {
               return (
                 <div
                   key={product.id}
-                  className="flex items-center justify-between rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4 hover:shadow-sm"
+                  className="flex items-center justify-between rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-4 hover:shadow-sm"
                 >
                   <Link href={`/products/${product.id}`} className="flex-1">
                     <p className="text-sm font-medium text-neutral-900">{product.title}</p>

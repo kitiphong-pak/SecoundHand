@@ -48,7 +48,7 @@ export default async function SellerProfilePage({
     <div className="flex min-h-full flex-1 flex-col bg-neutral-50">
       <Header user={user} />
       <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-6">
-        <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-5">
+        <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h1 className="font-[var(--font-display)] text-xl font-semibold text-neutral-900">
@@ -91,7 +91,7 @@ export default async function SellerProfilePage({
           ) : (
             <div className="mt-3 flex flex-col gap-3">
               {reviews.map((review) => (
-                <div key={review.id} className="rounded-[var(--radius-md)] border border-neutral-200 bg-white p-4">
+                <div key={review.id} className="rounded-[var(--radius-md)] border border-neutral-200 bg-neutral-0 p-4">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-neutral-900">
                       {nameByReviewer.get(review.fromUserId) ?? "ผู้ใช้ไม่พบ"}

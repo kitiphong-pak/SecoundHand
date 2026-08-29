@@ -55,7 +55,7 @@ function KpiTile({
   color?: string;
 }) {
   return (
-    <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4">
+    <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-4">
       <p className="text-xs text-neutral-500">{label}</p>
       <div className="mt-1.5 flex items-baseline gap-2">
         <p className="font-[var(--font-display)] text-2xl font-semibold tabular-nums text-neutral-900">
@@ -98,7 +98,7 @@ function StatGrid({ children }: { children: ReactNode }) {
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4">
+    <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-4">
       <p className="font-[var(--font-display)] text-2xl font-semibold tabular-nums text-neutral-900">
         {typeof value === "number" ? value.toLocaleString("th-TH") : value}
       </p>
@@ -249,7 +249,7 @@ export default async function AdminDashboardPage() {
         <h2 className="text-sm font-medium text-neutral-700">
           ออเดอร์ตามสถานะ ({totalOrders.toLocaleString("th-TH")} รายการทั้งหมด)
         </h2>
-        <div className="mt-3 rounded-[var(--radius-lg)] border border-neutral-200 bg-white p-4">
+        <div className="mt-3 rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-4">
           <div className="flex flex-col gap-2.5">
             {orderStatusCounts.map((s) => {
               const label = ORDER_STATUS_LABEL[s.status];
@@ -296,7 +296,7 @@ export default async function AdminDashboardPage() {
         {recentActivity.entries.length === 0 ? (
           <p className="mt-3 text-sm text-neutral-400">ยังไม่มีกิจกรรมในระบบ</p>
         ) : (
-          <div className="mt-3 divide-y divide-neutral-100 rounded-[var(--radius-lg)] border border-neutral-200 bg-white">
+          <div className="mt-3 divide-y divide-neutral-100 rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0">
             {recentActivity.entries.map((log) => (
               <div key={log.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
                 <p className="text-neutral-700">

@@ -18,7 +18,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             ref={ref}
             id={selectId}
             className={[
-              "w-full appearance-none rounded-[var(--radius-md)] border bg-white px-3.5 py-2.5 pr-9 text-sm text-neutral-900 outline-none transition-colors",
+              "w-full appearance-none rounded-[var(--radius-md)] border bg-neutral-0 px-3.5 py-2.5 pr-9 text-sm text-neutral-900 outline-none transition-colors",
               error
                 ? "border-error-500 focus:border-error-500"
                 : "border-neutral-300 focus:border-primary-500",
