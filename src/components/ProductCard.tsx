@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { Product } from "@/types";
 import { CONDITION_LABEL } from "@/lib/categories";
+import { LocationPinIcon } from "@/components/ui/LocationPinIcon";
 
 export function ProductCard({ product }: { product: Product }) {
   const cover = product.images[0];
@@ -25,7 +26,9 @@ export function ProductCard({ product }: { product: Product }) {
           ฿{product.price.toLocaleString("th-TH")}
         </p>
         <div className="flex items-center justify-between text-xs text-neutral-500">
-          <span>📍 {product.province}</span>
+          <span className="inline-flex items-center gap-1">
+            <LocationPinIcon /> {product.province}
+          </span>
           <span>{CONDITION_LABEL[product.condition]}</span>
         </div>
       </div>

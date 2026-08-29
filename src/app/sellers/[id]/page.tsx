@@ -6,6 +6,7 @@ import { getUserRating } from "@/lib/rating";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
 import { ProductCard } from "@/components/ProductCard";
+import { LocationPinIcon } from "@/components/ui/LocationPinIcon";
 
 export default async function SellerProfilePage({
   params,
@@ -54,7 +55,9 @@ export default async function SellerProfilePage({
               <h1 className="font-[var(--font-display)] text-xl font-semibold text-neutral-900">
                 {sellerRow.name}
               </h1>
-              <p className="mt-1 text-sm text-neutral-500">📍 {sellerRow.province}</p>
+              <p className="mt-1 flex items-center gap-1 text-sm text-neutral-500">
+                <LocationPinIcon /> {sellerRow.province}
+              </p>
             </div>
             {sellerRow.is_verified ? (
               <Badge status="success">ยืนยันตัวตนแล้ว ✅</Badge>

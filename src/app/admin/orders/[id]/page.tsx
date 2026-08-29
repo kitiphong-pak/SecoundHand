@@ -7,6 +7,7 @@ import { ProductGallery } from "@/components/ProductGallery";
 import { DisputeResolutionButtons } from "@/components/DisputeResolutionButtons";
 import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
 import { CONDITION_LABEL } from "@/lib/categories";
+import { LocationPinIcon } from "@/components/ui/LocationPinIcon";
 
 // มุมมองแบบ read-only ให้แอดมินเห็นบริบทเต็มของออเดอร์ (รูปสินค้า ไทม์ไลน์ ข้อมูลคู่ซื้อขาย)
 // ก่อนตัดสินข้อพิพาท — ต่างจากหน้า /orders/[id] ของผู้ใช้ทั่วไปตรงที่ไม่มีปุ่มทำธุรกรรมใดๆ
@@ -65,7 +66,9 @@ export default async function AdminOrderDetailPage({
               <ProductGallery images={product.images} title={product.title} />
               <p className="mt-3 whitespace-pre-line text-sm text-neutral-700">{product.description}</p>
               <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-500">
-                <span className="rounded-full bg-neutral-100 px-2.5 py-1">📍 {product.province}</span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-1">
+                  <LocationPinIcon /> {product.province}
+                </span>
                 <span className="rounded-full bg-neutral-100 px-2.5 py-1">
                   {CONDITION_LABEL[product.condition]}
                 </span>

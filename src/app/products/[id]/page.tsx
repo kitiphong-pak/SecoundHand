@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { BuyButton } from "@/components/BuyButton";
 import { ChatButton } from "@/components/ChatButton";
 import { ProductGallery } from "@/components/ProductGallery";
+import { LocationPinIcon } from "@/components/ui/LocationPinIcon";
 import { CONDITION_LABEL } from "@/lib/categories";
 import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
 import type { OrderStatus } from "@/types";
@@ -72,7 +73,9 @@ export default async function ProductDetailPage({
           </p>
 
           <div className="flex flex-wrap gap-2 text-xs text-neutral-500">
-            <span className="rounded-full bg-neutral-100 px-2.5 py-1">📍 {product.province}</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-1">
+              <LocationPinIcon /> {product.province}
+            </span>
             <span className="rounded-full bg-neutral-100 px-2.5 py-1">
               {CONDITION_LABEL[product.condition]}
             </span>
