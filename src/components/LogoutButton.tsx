@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 
-export function LogoutButton() {
+export function LogoutButton({ className = "" }: { className?: string }) {
   const router = useRouter();
   const onLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -11,7 +11,7 @@ export function LogoutButton() {
     router.refresh();
   };
   return (
-    <Button variant="ghost" size="sm" onClick={onLogout}>
+    <Button variant="ghost" size="sm" onClick={onLogout} className={className}>
       ออกจากระบบ
     </Button>
   );

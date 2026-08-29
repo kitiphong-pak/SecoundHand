@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { PublicUser } from "@/lib/auth";
-import { LogoutButton } from "@/components/LogoutButton";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserMenu } from "@/components/UserMenu";
 import { LocationPinIcon } from "@/components/ui/LocationPinIcon";
 
 interface Badges {
@@ -70,12 +69,14 @@ export function Header({ user }: { user: PublicUser }) {
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden items-center gap-1 text-sm text-neutral-500 md:inline-flex">
-            <LocationPinIcon /> {user.province}
-          </span>
-          <span className="hidden text-sm font-medium text-neutral-900 sm:inline">{user.name}</span>
-          <ThemeToggle />
-          <LogoutButton />
+          <UserMenu
+            user={user}
+            subtitle={
+              <>
+                <LocationPinIcon /> {user.province}
+              </>
+            }
+          />
         </div>
       </div>
 

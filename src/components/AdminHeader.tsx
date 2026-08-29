@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { PublicUser } from "@/lib/auth";
-import { LogoutButton } from "@/components/LogoutButton";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { UserMenu } from "@/components/UserMenu";
 
 const NAV_LINKS = [
   { href: "/admin", label: "ภาพรวม" },
@@ -52,9 +51,7 @@ export function AdminHeader({ user }: { user: PublicUser }) {
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          <ThemeToggle className="text-slate-300 hover:bg-slate-800 hover:text-white" />
-          <span className="hidden text-sm text-slate-300 sm:inline">{user.name}</span>
-          <LogoutButton />
+          <UserMenu user={user} subtitle="ผู้ดูแลระบบ" dark />
         </div>
       </div>
     </header>
