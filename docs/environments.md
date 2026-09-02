@@ -65,14 +65,17 @@ Supabase Dashboard → New project ตั้งชื่อให้แยกอ
 
 ### 3. สร้างโครงสร้างฐานข้อมูลให้ PRD
 
-รัน `supabase/schema.sql` ก่อน (ตารางตั้งต้น) ผ่าน SQL Editor ของ project ใหม่
-แล้วให้ตัวรัน migration จัดการที่เหลือ โดยชี้ `DATABASE_URL` ไปที่ PRD ชั่วคราว:
+ใส่ค่าที่จดไว้ลง `.env` เป็นบรรทัด `PRD_DATABASE_URL=...` (คนละบรรทัดกับ `DATABASE_URL`
+ที่ชี้ไป UAT — แยกตัวแปรกันเพื่อไม่ให้รันผิดตัว) แล้วสั่ง:
 
 ```bash
-DATABASE_URL="<URI ของ PRD>" npm run migrate
+npm run migrate:prd
 ```
 
-ตัวรันจะไล่ไฟล์ `002` ถึง `013` ตามลำดับจริงๆ (ไม่ใช่ baseline) แล้วจดไว้ใน `schema_migrations`
+ตัวรันจะไล่ไฟล์ `001` ถึง `013` ตามลำดับจริงๆ (ไม่ใช่ baseline) ตั้งแต่ตารางตั้งต้นไปจนถึง
+ไฟล์ล่าสุด ไม่มีขั้นตอนที่ต้อง paste SQL เข้า Dashboard เองเลย
+
+อยากดูก่อนว่าจะรันอะไรบ้างโดยยังไม่แตะอะไร: `npm run migrate:prd:status`
 
 > **ห้ามรัน `npm run seed` ใส่ PRD เด็ดขาด** สคริปต์นั้นสร้างบัญชีเดโมที่มีรหัสผ่าน
 > `password123` รวมถึงบัญชีแอดมิน ถ้าหลุดขึ้นระบบจริงคือช่องโหว่เต็มๆ
@@ -114,13 +117,13 @@ CI รันอัตโนมัติ (lint / typecheck / test / build)
    ↓
 Vercel deploy ขึ้น Preview อัตโนมัติ  ← นี่คือ UAT
    ↓
-มีไฟล์ migration ใหม่?  npm run migrate     (DATABASE_URL ใน .env = UAT อยู่แล้ว)
+มีไฟล์ migration ใหม่?  npm run migrate
    ↓
 เปิด URL ของ Preview ทดสอบเอง
    ↓
 ผ่านแล้ว merge develop → main
    ↓
-รัน migration ใส่ PRD ก่อน:  DATABASE_URL="<URI ของ PRD>" npm run migrate
+รัน migration ใส่ PRD ก่อน:  npm run migrate:prd
    ↓
 Vercel deploy ขึ้น Production อัตโนมัติ
 ```
@@ -129,9 +132,19 @@ Vercel deploy ขึ้น Production อัตโนมัติ
 เว็บจะพังทันที แต่ถ้ารัน migration ก่อนแล้วโค้ดเก่ายังรันอยู่ ปกติจะไม่มีปัญหา เพราะโค้ดเก่า
 แค่ไม่รู้จักตารางใหม่เฉยๆ
 
-**ระวังตอนพิมพ์คำสั่ง migrate ใส่ PRD** เพราะ `.env` ชี้ไป UAT เป็นค่าตั้งต้น การรัน PRD
-ต้องใส่ `DATABASE_URL=` นำหน้าทุกครั้ง ถ้าลืมคือรันใส่ UAT ซ้ำ (ซึ่งไม่เสียหาย เพราะตัวรันจะ
-บอกว่าไม่มีอะไรต้องรัน) แต่ผลคือ PRD ไม่ได้อัปเดตจริงแล้วเว็บพังหลัง deploy
+## ตารางคำสั่ง migrate
+
+| คำสั่ง | ปลายทาง | รัน SQL จริง | เขียนสมุดบันทึก |
+|---|---|---|---|
+| `npm run migrate` | UAT | ✅ | ✅ |
+| `npm run migrate:prd` | **PRD** | ✅ | ✅ |
+| `npm run migrate:status` | UAT | ❌ | ❌ |
+| `npm run migrate:prd:status` | PRD | ❌ | ❌ |
+| `npm run migrate:baseline` | UAT | ❌ | ✅ |
+
+ปลายทางแยกกันด้วยตัวแปรคนละตัวใน `.env` (`DATABASE_URL` กับ `PRD_DATABASE_URL`) ไม่ใช่
+ด้วยการพิมพ์ค่านำหน้าคำสั่ง จะได้ไม่มีทางรันผิดตัวเพราะลืมพิมพ์ และคำสั่งที่แตะ PRD จะขึ้น
+ข้อความเตือนก่อนเสมอว่ากำลังทำงานกับระบบจริง
 
 ---
 

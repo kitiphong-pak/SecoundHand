@@ -1,6 +1,7 @@
--- SecoundHand — schema สำหรับ Supabase (Postgres)
--- วิธีใช้: paste ทั้งไฟล์นี้ลงใน Supabase Dashboard > SQL Editor > New query แล้วกด Run
--- รันได้ครั้งเดียวตอนตั้งโปรเจกต์ใหม่ (ถ้ารันซ้ำจะ error เพราะตารางมีอยู่แล้ว)
+-- Migration 001: ตารางตั้งต้นทั้งหมดของระบบ
+-- เดิมไฟล์นี้ชื่อ supabase/schema.sql และต้อง paste เข้า SQL Editor เอง ย้ายมาเป็น migration
+-- ตัวแรกเพื่อให้ฐานข้อมูลใหม่สร้างเสร็จด้วย npm run migrate คำสั่งเดียว ไม่มีขั้นตอนที่ต้องทำมือ
+-- (ตัวรัน migration จดไว้ว่ารันไฟล์ไหนแล้ว จึงไม่มีทางรันซ้ำโดยไม่ตั้งใจ)
 
 create table users (
   id uuid primary key default gen_random_uuid(),

@@ -12,6 +12,8 @@
     "migrate": "node --env-file=.env scripts/migrate.mjs up",
     "migrate:status": "node --env-file=.env scripts/migrate.mjs status",
     "migrate:baseline": "node --env-file=.env scripts/migrate.mjs baseline",
+    "migrate:prd": "node --env-file=.env scripts/migrate.mjs up --prd",
+    "migrate:prd:status": "node --env-file=.env scripts/migrate.mjs status --prd",
     "seed": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs scripts/seed.ts"
   },
   "dependencies": {

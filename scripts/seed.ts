@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { supabase } from "../src/lib/supabase";
 
-// สคริปต์ seed ข้อมูลตั้งต้นลง Supabase — รันครั้งเดียวหลังสร้างตารางจาก schema.sql เสร็จ
+// สคริปต์ seed ข้อมูลตั้งต้นลง Supabase — รันครั้งเดียวหลังรัน migration เสร็จ (ห้ามรันใส่ PRD)
 // ใช้: npx tsx scripts/seed.ts
 
 async function main() {

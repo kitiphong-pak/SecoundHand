@@ -29,19 +29,30 @@ if (!["up", "status", "baseline"].includes(mode)) {
   process.exit(1);
 }
 
-const connectionString = process.env.DATABASE_URL;
+// เลือกปลายทางด้วย flag แทนการให้คนใส่ DATABASE_URL= นำหน้าคำสั่งเอง — วิธีนั้นถ้าลืมใส่
+// จะไปรันใส่ UAT เงียบๆ แล้ว PRD ไม่ได้อัปเดตจริง ซึ่งจะไปโผล่ตอนเว็บพังหลัง deploy
+const targetPrd = process.argv.includes("--prd");
+const envVar = targetPrd ? "PRD_DATABASE_URL" : "DATABASE_URL";
+const connectionString = process.env[envVar];
 if (!connectionString) {
   console.error(
     [
-      "ไม่พบ DATABASE_URL",
+      `ไม่พบ ${envVar}`,
       "",
-      "หาได้จาก Supabase Dashboard > Project Settings > Database > Connection string > URI",
-      "แล้วใส่ลงไฟล์ .env เป็นบรรทัด DATABASE_URL=postgresql://...",
+      "หาได้จาก Supabase Dashboard > ปุ่ม Connect ด้านบน > Session pooler > URI",
+      `แล้วใส่ลงไฟล์ .env เป็นบรรทัด ${envVar}=postgresql://...`,
       "",
-      "ใช้ค่าของ environment ที่ต้องการรันด้วย — ถ้าจะรันกับ UAT ก็ต้องเป็น URL ของ UAT",
+      targetPrd
+        ? "ค่านี้ต้องเป็นของ project ที่ใช้เป็น PRD"
+        : "ค่านี้ต้องเป็นของ project ที่ใช้เป็น UAT (เติม --prd ถ้าต้องการรันใส่ PRD)",
     ].join("\n")
   );
   process.exit(1);
+}
+
+// รันใส่ PRD ต้องเห็นชัดว่ากำลังทำอะไรอยู่ ไม่ใช่ต่างกันแค่ตัวแปรที่มองไม่เห็น
+if (targetPrd && mode !== "status") {
+  console.log("*** กำลังทำงานกับฐานข้อมูล PRD (ระบบจริง) ***\n");
 }
 
 // อ่านไฟล์ .sql ทั้งหมดแล้วเรียงตามชื่อ ซึ่งเท่ากับเรียงตามเลขนำหน้า (002, 003, ...)
