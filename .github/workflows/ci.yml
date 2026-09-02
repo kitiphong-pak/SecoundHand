@@ -29,3 +29,16 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # ขั้นนี้จับ error ที่โผล่เฉพาะตอน build จริง ซึ่ง lint/tsc มองไม่เห็น เช่นเผลอ import
+      # โมดูลฝั่งเซิร์ฟเวอร์เข้าไปใน Client Component
+      #
+      # ต้องใส่ค่า env ปลอมให้ เพราะ src/lib/supabase.ts สร้าง client ตั้งแต่ตอน import
+      # ถ้าค่าว่างจะ throw "supabaseUrl is required" ตอน Next เก็บข้อมูลของแต่ละ route
+      # ไม่ใช้คีย์จริงเพราะ build ไม่ได้ต่อฐานข้อมูลเลย — ทุก route ที่แตะ Supabase เป็น
+      # dynamic (ƒ) ถูก render ตอนมี request จริงเท่านั้น ไม่ใช่ตอน build
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_SECRET_KEY: placeholder-key-for-build-only
