@@ -5,6 +5,7 @@ export type AuditAction =
   | "user.profile_updated"
   | "user.password_changed"
   | "product.listed"
+  | "product.updated"
   | "product.removed"
   | "order.created"
   | "order.paid"
@@ -22,6 +23,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   "user.profile_updated": "แก้ไขโปรไฟล์",
   "user.password_changed": "เปลี่ยนรหัสผ่าน",
   "product.listed": "ลงขายสินค้า",
+  "product.updated": "แก้ไขประกาศสินค้า",
   "product.removed": "ลบประกาศสินค้า",
   "order.created": "สร้างออเดอร์",
   "order.paid": "ชำระเงิน",

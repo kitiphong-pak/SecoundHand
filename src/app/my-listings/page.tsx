@@ -95,7 +95,15 @@ export default async function MyListingsPage() {
                   <div className="flex items-center gap-3">
                     {badge && <Badge status={badge.status}>{badge.label}</Badge>}
                     {product.status === "listed" && (
-                      <RemoveListingButton productId={product.id} />
+                      <>
+                        <Link
+                          href={`/products/${product.id}/edit`}
+                          className="text-xs text-primary-600 hover:underline"
+                        >
+                          แก้ไข
+                        </Link>
+                        <RemoveListingButton productId={product.id} />
+                      </>
                     )}
                   </div>
                 </div>

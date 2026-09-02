@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { CATEGORIES, CONDITION_LABEL } from "@/lib/categories";
 import { fileToCompressedDataUrl } from "@/lib/image";
+import type { Product } from "@/types";
 
 const MAX_IMAGES = 5;
 
@@ -23,10 +24,13 @@ async function uploadImage(dataUrl: string): Promise<string> {
   return data.url as string;
 }
 
-export function SellForm() {
+// ใช้ทั้งหน้าลงขายใหม่และหน้าแก้ไขประกาศ — ส่ง product เข้ามาก็สลับเป็นโหมดแก้ไข (PATCH ของเดิม)
+// แทนสร้างใหม่ (POST) โดยฟอร์มหน้าตาเดียวกันทุกอย่าง ต่างกันแค่ค่าเริ่มต้นกับ endpoint ที่ยิง
+export function SellForm({ product }: { product?: Product }) {
   const router = useRouter();
+  const isEdit = Boolean(product);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<string[]>(product?.images ?? []);
   const [imageError, setImageError] = useState("");
   const [processingImages, setProcessingImages] = useState(false);
   const [error, setError] = useState("");
@@ -87,8 +91,8 @@ export function SellForm() {
     };
 
     try {
-      const res = await fetch("/api/products", {
-        method: "POST",
+      const res = await fetch(isEdit ? `/api/products/${product!.id}` : "/api/products", {
+        method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -159,17 +163,32 @@ export function SellForm() {
         {imageError && <p className="mt-1.5 text-xs text-error-500">{imageError}</p>}
       </div>
 
-      <Input label="ชื่อสินค้า" name="title" placeholder="เช่น จักรยานเสือภูเขา TREK" required />
+      <Input
+        label="ชื่อสินค้า"
+        name="title"
+        placeholder="เช่น จักรยานเสือภูเขา TREK"
+        defaultValue={product?.title}
+        required
+      />
       <Textarea
         label="รายละเอียดสินค้า"
         name="description"
         rows={4}
         placeholder="สภาพสินค้า ตำหนิ อุปกรณ์ที่ให้มาด้วย..."
+        defaultValue={product?.description}
         required
       />
-      <Input label="ราคา (บาท)" name="price" type="number" min={1} placeholder="0" required />
+      <Input
+        label="ราคา (บาท)"
+        name="price"
+        type="number"
+        min={1}
+        placeholder="0"
+        defaultValue={product?.price}
+        required
+      />
 
-      <Select label="หมวดหมู่" name="category" defaultValue="" required>
+      <Select label="หมวดหมู่" name="category" defaultValue={product?.category ?? ""} required>
         <option value="" disabled>
           เลือกหมวดหมู่
         </option>
@@ -180,7 +199,7 @@ export function SellForm() {
         ))}
       </Select>
 
-      <Select label="สภาพสินค้า" name="condition" defaultValue="" required>
+      <Select label="สภาพสินค้า" name="condition" defaultValue={product?.condition ?? ""} required>
         <option value="" disabled>
           เลือกสภาพสินค้า
         </option>
@@ -194,7 +213,13 @@ export function SellForm() {
       {error && <p className="text-sm text-error-500">{error}</p>}
 
       <Button type="submit" disabled={submitting || processingImages} className="mt-2">
-        {submitting ? "กำลังลงขาย..." : "ลงขายสินค้า"}
+        {submitting
+          ? isEdit
+            ? "กำลังบันทึก..."
+            : "กำลังลงขาย..."
+          : isEdit
+            ? "บันทึกการแก้ไข"
+            : "ลงขายสินค้า"}
       </Button>
     </form>
   );
