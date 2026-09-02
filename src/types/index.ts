@@ -73,6 +73,18 @@ export interface ChatMessage {
   read: boolean;
 }
 
+// ข้อความติดต่อระหว่างผู้ใช้กับทีมผู้ดูแล — ห้องสนทนาระบุด้วย userId เดียว (คนละเรื่องกับ
+// ChatMessage ที่เป็นแชทซื้อขายผูกกับสินค้าและคู่สนทนาสองฝั่ง)
+export interface SupportMessage {
+  id: string;
+  userId: string; // เจ้าของห้องสนทนา (ผู้ใช้ที่ติดต่อเข้ามา)
+  senderId: string; // คนที่พิมพ์จริง (ผู้ใช้เอง หรือแอดมินคนใดคนหนึ่ง)
+  fromAdmin: boolean;
+  text: string;
+  read: boolean;
+  createdAt: string;
+}
+
 export interface Review {
   id: string;
   orderId: string;

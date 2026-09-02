@@ -12,6 +12,7 @@ interface Badges {
   unreadChats: number;
   paidAwaitingShipment: number;
   awaitingConfirmation: number;
+  unreadSupport: number;
 }
 
 const NAV_LINKS: Array<{
@@ -77,6 +78,7 @@ export function Header({ user }: { user: PublicUser }) {
     unreadChats: 0,
     paidAwaitingShipment: 0,
     awaitingConfirmation: 0,
+    unreadSupport: 0,
   });
 
   useEffect(() => {
@@ -112,6 +114,7 @@ export function Header({ user }: { user: PublicUser }) {
           <div className="flex items-center gap-3">
             <UserMenu
               user={user}
+              supportUnread={badges.unreadSupport}
               subtitle={
                 <>
                   <LocationPinIcon /> {user.province}

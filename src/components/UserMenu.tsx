@@ -10,10 +10,12 @@ export function UserMenu({
   user,
   subtitle,
   dark = false,
+  supportUnread = 0,
 }: {
   user: PublicUser;
   subtitle: ReactNode;
   dark?: boolean;
+  supportUnread?: number;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -49,7 +51,7 @@ export function UserMenu({
           dark ? "hover:bg-slate-800" : "hover:bg-neutral-100",
         ].join(" ")}
       >
-        <span className="flex h-8 w-8 flex-none items-center justify-center overflow-hidden rounded-full bg-primary-100 text-sm font-medium text-primary-700">
+        <span className="relative flex h-8 w-8 flex-none items-center justify-center overflow-hidden rounded-full bg-primary-100 text-sm font-medium text-primary-700">
           {user.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -57,6 +59,13 @@ export function UserMenu({
             initial
           )}
         </span>
+        {/* จุดแดงบนรูปโปรไฟล์เวลาแอดมินตอบกลับมา — ให้เห็นได้โดยไม่ต้องเปิดเมนูก่อน */}
+        {supportUnread > 0 && (
+          <span
+            aria-label={`มีข้อความใหม่จากผู้ดูแล ${supportUnread} ข้อความ`}
+            className="absolute left-6 top-0.5 h-2.5 w-2.5 rounded-full bg-error-500 ring-2 ring-neutral-0"
+          />
+        )}
         <span className="hidden flex-col items-start leading-tight sm:flex">
           <span className={["text-sm font-semibold", dark ? "text-white" : "text-neutral-900"].join(" ")}>
             {user.name}
@@ -89,6 +98,20 @@ export function UserMenu({
           >
             โปรไฟล์ของฉัน
           </Link>
+          {user.role !== "admin" && (
+            <Link
+              href="/support"
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-between rounded-[var(--radius-md)] px-2.5 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100"
+            >
+              ติดต่อผู้ดูแล
+              {supportUnread > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-error-500 px-1 text-[10px] font-medium text-white">
+                  {supportUnread > 9 ? "9+" : supportUnread}
+                </span>
+              )}
+            </Link>
+          )}
           <div className="flex items-center justify-between rounded-[var(--radius-md)] px-2.5 py-1.5 text-sm text-neutral-700">
             <span>โหมดสว่าง/มืด</span>
             <ThemeToggle />
