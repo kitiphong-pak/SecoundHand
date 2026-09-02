@@ -12,7 +12,8 @@ export interface User {
   province: Province;
   role: Role;
   avatarUrl?: string;
-  isVerified: boolean; // ผ่านการยืนยันตัวตน (KYC demo) แล้วหรือยัง
+  isVerified: boolean; // ผ่านการยืนยันตัวตน (KYC demo) แล้วหรือยัง — แอดมินกดยืนยันให้จาก /admin/users
+  isSuspended: boolean; // ถูกแอดมินระงับบัญชี — ระงับแล้วล็อกอินไม่ได้และ session เดิมถูกเลิกทันที
   createdAt: string;
 }
 

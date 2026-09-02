@@ -14,6 +14,7 @@ export function mapUser(row: Record<string, unknown>): User {
     role: row.role as User["role"],
     avatarUrl: (row.avatar_url as string | null) ?? undefined,
     isVerified: row.is_verified as boolean,
+    isSuspended: (row.is_suspended as boolean | null) ?? false,
     createdAt: row.created_at as string,
   };
 }

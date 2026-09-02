@@ -17,6 +17,10 @@ export async function POST(req: Request) {
   if (!row || !bcrypt.compareSync(password, row.password_hash)) {
     return NextResponse.json({ error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" }, { status: 401 });
   }
+  // เช็คหลังยืนยันรหัสผ่านถูกแล้วเท่านั้น กันเดารหัสผ่านจากข้อความ error ที่ต่างกัน
+  if (row.is_suspended) {
+    return NextResponse.json({ error: "บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ" }, { status: 403 });
+  }
 
   const user = mapUser(row);
   await createSession(user.id);

@@ -8,6 +8,7 @@ import { UserMenu } from "@/components/UserMenu";
 const NAV_LINKS = [
   { href: "/admin", label: "ภาพรวม" },
   { href: "/admin/disputes", label: "ข้อพิพาท" },
+  { href: "/admin/users", label: "ผู้ใช้" },
   { href: "/admin/logs", label: "กิจกรรม" },
 ];
 

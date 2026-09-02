@@ -60,5 +60,12 @@ export async function getCurrentUser(): Promise<PublicUser | null> {
     .maybeSingle();
   if (!userRow) return null;
 
+  // แอดมินอาจระงับบัญชีนี้ไปแล้วหลังจากที่ล็อกอินสำเร็จไปก่อนหน้า — เลิก session ทิ้งทันทีแทน
+  // ปล่อยให้ใช้งานต่อไปได้จนกว่า cookie จะหมดอายุเอง (30 วัน)
+  if (userRow.is_suspended) {
+    await supabase.from("sessions").delete().eq("token", token);
+    return null;
+  }
+
   return toPublicUser(mapUser(userRow));
 }

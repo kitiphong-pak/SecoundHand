@@ -4,6 +4,10 @@ export type AuditAction =
   | "user.registered"
   | "user.profile_updated"
   | "user.password_changed"
+  | "user.verified"
+  | "user.unverified"
+  | "user.suspended"
+  | "user.unsuspended"
   | "product.listed"
   | "product.updated"
   | "product.removed"
@@ -22,6 +26,10 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   "user.registered": "สมัครสมาชิกใหม่",
   "user.profile_updated": "แก้ไขโปรไฟล์",
   "user.password_changed": "เปลี่ยนรหัสผ่าน",
+  "user.verified": "แอดมินยืนยันตัวตนให้ผู้ใช้",
+  "user.unverified": "แอดมินยกเลิกการยืนยันตัวตน",
+  "user.suspended": "แอดมินระงับบัญชีผู้ใช้",
+  "user.unsuspended": "แอดมินเปิดใช้งานบัญชีผู้ใช้",
   "product.listed": "ลงขายสินค้า",
   "product.updated": "แก้ไขประกาศสินค้า",
   "product.removed": "ลบประกาศสินค้า",
