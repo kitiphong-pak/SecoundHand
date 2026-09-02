@@ -52,7 +52,15 @@ function readMigrations() {
     .sort()
     .map((filename) => {
       const sql = readFileSync(path.join(MIGRATIONS_DIR, filename), "utf8");
-      return { filename, sql, checksum: createHash("sha256").update(sql).digest("hex").slice(0, 16) };
+      // แปลง CRLF เป็น LF ก่อนคำนวณ checksum เสมอ — git บน Windows เขียนไฟล์ออกมาเป็น CRLF
+      // แต่บน Linux/mac เป็น LF ถ้า hash ดิบๆ ไฟล์เดียวกันจะได้ค่าต่างกันคนละเครื่อง แล้วตัวรัน
+      // จะฟ้องว่า "ไฟล์ถูกแก้" ทั้งที่ SQL เหมือนกันทุกตัวอักษร (เจอจริงตอน git checkout ไฟล์กลับมา)
+      const normalized = sql.replace(/\r\n/g, "\n");
+      return {
+        filename,
+        sql,
+        checksum: createHash("sha256").update(normalized).digest("hex").slice(0, 16),
+      };
     });
 }
 
@@ -69,6 +77,12 @@ try {
       applied_at timestamptz not null default now()
     );
   `);
+
+  // ทุกตารางใน public schema ถูก Supabase เปิดให้เข้าถึงผ่าน PostgREST โดยอัตโนมัติ ถ้าไม่เปิด
+  // RLS ตารางนี้จะกลายเป็นตารางเดียวในระบบที่ anon key อ่านได้ ขัดกับหลัก default-deny ที่
+  // migration 005 วางไว้ให้ทุกตาราง (เนื้อหาไม่ใช่ความลับ แต่ไม่มีเหตุผลให้เปิดเผย)
+  // ตัวรันเองไม่กระทบ เพราะต่อผ่าน postgres ซึ่งเป็นเจ้าของตาราง และเจ้าของข้าม RLS ได้อยู่แล้ว
+  await client.query("alter table schema_migrations enable row level security;");
 
   const { rows: appliedRows } = await client.query("select filename, checksum from schema_migrations");
   const applied = new Map(appliedRows.map((r) => [r.filename, r.checksum]));
