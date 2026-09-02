@@ -13,7 +13,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -21,8 +21,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # ต้องผ่าน next typegen ก่อน ไม่ใช่เรียก tsc ตรงๆ — LayoutProps/PageProps/RouteContext
+      # เป็น global type ที่ Next สร้างลง .next/types ตอน dev/build ไม่ได้ commit ขึ้น repo
+      # เครื่องเราจึงเจอเพราะเคยรัน next dev มาแล้ว แต่ CI ที่ checkout ใหม่ไม่มี .next เลย
       - name: Type check
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - name: Test
         run: npm test
