@@ -4,8 +4,8 @@
 
 ## ทำไมต้องแยก
 
-ตอนนี้มีฐานข้อมูลชุดเดียว ทุกครั้งที่ทดสอบฟีเจอร์ใหม่จะไปยุ่งกับข้อมูลจริง เช่นการทดสอบ
-ระบบข้อความต้องสร้างบัญชีปลอม ส่งข้อความ แล้วตามลบทีหลัง ถ้าลบไม่หมดก็ค้างอยู่ในระบบจริง
+ตอนนี้มีฐานข้อมูลชุดเดียว ทุกครั้งที่ทดสอบฟีเจอร์ใหม่จะไปยุ่งกับข้อมูลเดียวกันหมด เช่นการ
+ทดสอบระบบข้อความต้องสร้างบัญชีปลอม ส่งข้อความ แล้วตามลบทีหลัง ถ้าลบไม่หมดก็ค้างอยู่
 
 พอแยกแล้ว: ทดสอบบน UAT ได้เต็มที่ พังก็ไม่มีใครเดือดร้อน ผ่านแล้วค่อยเลื่อนขึ้น PRD
 
@@ -13,48 +13,77 @@
 
 | ชั้น | branch | ที่รัน | ฐานข้อมูล |
 |---|---|---|---|
-| UAT | `develop` | Vercel Preview | Supabase project ตัวใหม่ |
-| PRD | `main` | Vercel Production | Supabase project ตัวปัจจุบัน |
+| UAT | `develop` | Vercel Preview | **Supabase project ตัวปัจจุบัน** |
+| PRD | `main` | Vercel Production | **Supabase project ตัวใหม่ที่จะสร้าง** |
 
 โค้ดเป็นชุดเดียวกันทั้งสองชั้น ต่างกันแค่ค่า environment variable ที่ชี้ไปคนละฐานข้อมูล
+
+**ทำไมเอาตัวเก่าเป็น UAT** เพราะตัวเก่ามีข้อมูลเดโม ข้อมูลที่สร้างระหว่างพัฒนา และบัญชี
+ทดสอบปนอยู่เต็มไปหมดแล้ว ซึ่งเป็นสภาพที่เหมาะกับ UAT พอดี ส่วน PRD ควรเริ่มจากฐานข้อมูล
+เปล่าที่ไม่มีอะไรปลอมปนเลย
+
+ผลพลอยได้: ไฟล์ `.env` ในเครื่องยังชี้ไปที่ตัวเดิมเหมือนเดิม ไม่ต้องแก้อะไร และแปลว่า
+**การพัฒนาในเครื่องจะไม่มีทางแตะฐานข้อมูลจริงได้เลย** ซึ่งเป็นสิ่งที่ควรเป็น
 
 ---
 
 ## ส่วนที่ต้องทำเอง (ต้องใช้บัญชีของคุณ)
 
-### 1. สร้าง Supabase project สำหรับ UAT
-
-Supabase Dashboard → New project ตั้งชื่อให้แยกออกชัดๆ เช่น `secoundhand-uat`
-เลือก region เดียวกับตัวปัจจุบันเพื่อให้ความเร็วใกล้เคียงกัน
-
-จดค่า 3 ตัวจาก Project Settings ไว้:
-
-- `NEXT_PUBLIC_SUPABASE_URL` — Settings → API → Project URL
-- `SUPABASE_SECRET_KEY` — Settings → API → service_role key
-- `DATABASE_URL` — Settings → Database → Connection string → URI
-
-### 2. สร้างโครงสร้างฐานข้อมูลให้ UAT
-
-รัน `supabase/schema.sql` ก่อน (ตารางตั้งต้น) แล้วค่อยให้ตัวรัน migration จัดการที่เหลือ:
-
-```bash
-DATABASE_URL="<URI ของ UAT>" npm run migrate
-```
-
-ตัวรันจะไล่ไฟล์ `002` ถึง `013` ตามลำดับให้เอง แล้วจดไว้ในตาราง `schema_migrations`
-ถ้าอยากดูก่อนว่าจะรันอะไรบ้างโดยยังไม่แก้อะไร ใช้ `npm run migrate:status`
-
-### 3. ตั้ง baseline ให้ฐานข้อมูลปัจจุบัน (PRD)
+### 1. ตั้ง baseline ให้ฐานข้อมูลปัจจุบัน (ที่กำลังจะเป็น UAT)
 
 ฐานข้อมูลตัวปัจจุบันรัน migration ด้วยมือมาแล้วทั้ง 12 ไฟล์ แต่ยังไม่มีตาราง `schema_migrations`
-ถ้าเผลอสั่ง `npm run migrate` ใส่มันจะพยายามรันซ้ำทั้งหมด ต้องบอกมันก่อนว่ารันไปแล้ว:
+ถ้าเผลอสั่ง `npm run migrate` ใส่ มันจะพยายามรันซ้ำทั้งหมด ต้องบอกมันก่อนว่ารันไปแล้ว
+
+ใส่ `DATABASE_URL` ลง `.env` ก่อน (Supabase Dashboard → Project Settings → Database →
+Connection string → URI) แล้วสั่ง:
+
+```bash
+npm run migrate:status
+```
+
+ควรขึ้นว่าทั้ง 12 ไฟล์อยู่ในสถานะ "รอรัน" — ซึ่งไม่ตรงกับความจริง เพราะรันไปหมดแล้ว จากนั้น:
 
 ```bash
 npm run migrate:baseline
 ```
 
-**สั่งครั้งเดียวเท่านั้น และต้องแน่ใจว่า `DATABASE_URL` ใน `.env` ชี้ไปที่ฐานข้อมูลปัจจุบัน**
-หลังจากนี้ไฟล์ใหม่ทุกไฟล์รันผ่าน `npm run migrate` ได้เลย ไม่ต้อง copy-paste อีก
+**สั่งครั้งเดียวเท่านั้น และต้องแน่ใจว่า `DATABASE_URL` ชี้ไปที่ฐานข้อมูลปัจจุบัน**
+สั่งซ้ำไม่เสียหาย แต่ห้ามเผลอไปสั่งใส่ฐานข้อมูลเปล่า เพราะมันจะจดว่ารันแล้วทั้งที่ยังไม่ได้รัน
+ทำให้ได้ฐานข้อมูลว่างเปล่าที่ระบบเข้าใจว่าอัปเดตแล้ว
+
+### 2. สร้าง Supabase project สำหรับ PRD
+
+Supabase Dashboard → New project ตั้งชื่อให้แยกออกชัดๆ เช่น `secoundhand-prod`
+เลือก region เดียวกับตัวปัจจุบัน และ**ตั้งรหัสผ่านฐานข้อมูลใหม่ที่ไม่ซ้ำกับตัวเดิม**
+
+จดค่า 4 ตัวไว้:
+
+- `NEXT_PUBLIC_SUPABASE_URL` — Settings → API → Project URL
+- `SUPABASE_SECRET_KEY` — Settings → API → service_role key
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — Settings → API → anon/publishable key
+- `DATABASE_URL` — Settings → Database → Connection string → URI
+
+### 3. สร้างโครงสร้างฐานข้อมูลให้ PRD
+
+รัน `supabase/schema.sql` ก่อน (ตารางตั้งต้น) ผ่าน SQL Editor ของ project ใหม่
+แล้วให้ตัวรัน migration จัดการที่เหลือ โดยชี้ `DATABASE_URL` ไปที่ PRD ชั่วคราว:
+
+```bash
+DATABASE_URL="<URI ของ PRD>" npm run migrate
+```
+
+ตัวรันจะไล่ไฟล์ `002` ถึง `013` ตามลำดับจริงๆ (ไม่ใช่ baseline) แล้วจดไว้ใน `schema_migrations`
+
+> **ห้ามรัน `npm run seed` ใส่ PRD เด็ดขาด** สคริปต์นั้นสร้างบัญชีเดโมที่มีรหัสผ่าน
+> `password123` รวมถึงบัญชีแอดมิน ถ้าหลุดขึ้นระบบจริงคือช่องโหว่เต็มๆ
+> ฐานข้อมูล PRD ควรว่างเปล่าจนกว่าจะมีผู้ใช้จริงคนแรกสมัครเข้ามา
+
+**การสร้างแอดมินคนแรกบน PRD:** สมัครสมาชิกผ่านหน้าเว็บตามปกติด้วยอีเมลจริงและรหัสผ่านที่
+แข็งแรง แล้วค่อยเลื่อนสิทธิ์ผ่าน SQL Editor:
+
+```sql
+update users set role = 'admin' where email = 'อีเมลจริงของคุณ';
+```
 
 ### 4. เชื่อม Vercel
 
@@ -62,14 +91,17 @@ npm run migrate:baseline
 2. Settings → Git → Production Branch ตั้งเป็น `main`
 3. Settings → Environment Variables ใส่ค่าแยกตาม environment:
 
-| ตัวแปร | Production | Preview |
+| ตัวแปร | Production (PRD = project ใหม่) | Preview (UAT = project เดิม) |
 |---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | ของ PRD | ของ UAT |
-| `SUPABASE_SECRET_KEY` | ของ PRD | ของ UAT |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | ของ PRD | ของ UAT |
-| `CRON_SECRET` | สุ่มขึ้นมาใหม่ | สุ่มอีกตัว |
+| `NEXT_PUBLIC_SUPABASE_URL` | ของ project ใหม่ | ของ project เดิม |
+| `SUPABASE_SECRET_KEY` | ของ project ใหม่ | ของ project เดิม |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | ของ project ใหม่ | ของ project เดิม |
+| `CRON_SECRET` | สุ่มขึ้นมาใหม่ | สุ่มอีกตัวคนละค่า |
 
 ไม่ต้องใส่ `DATABASE_URL` บน Vercel — ตัวแอปไม่ได้ใช้ ใช้เฉพาะตอนรัน migration จากเครื่องเรา
+
+**ตรวจก่อนปล่อยจริง:** เข้า Production URL แล้วลองล็อกอินด้วย `admin@secoundhand.demo` /
+`password123` ถ้าเข้าได้แปลว่าต่อผิดฐานข้อมูล (ไปโดน UAT) ต้องแก้ก่อนเปิดให้คนใช้
 
 ---
 
@@ -82,13 +114,13 @@ CI รันอัตโนมัติ (lint / typecheck / test / build)
    ↓
 Vercel deploy ขึ้น Preview อัตโนมัติ  ← นี่คือ UAT
    ↓
-รัน migration ใส่ UAT ถ้ามีไฟล์ใหม่:  DATABASE_URL="<UAT>" npm run migrate
+มีไฟล์ migration ใหม่?  npm run migrate     (DATABASE_URL ใน .env = UAT อยู่แล้ว)
    ↓
 เปิด URL ของ Preview ทดสอบเอง
    ↓
 ผ่านแล้ว merge develop → main
    ↓
-รัน migration ใส่ PRD ก่อน:  npm run migrate
+รัน migration ใส่ PRD ก่อน:  DATABASE_URL="<URI ของ PRD>" npm run migrate
    ↓
 Vercel deploy ขึ้น Production อัตโนมัติ
 ```
@@ -96,6 +128,10 @@ Vercel deploy ขึ้น Production อัตโนมัติ
 **ลำดับสำคัญ: รัน migration ก่อน deploy เสมอ** ถ้า deploy โค้ดใหม่ที่ต้องใช้ตารางที่ยังไม่มี
 เว็บจะพังทันที แต่ถ้ารัน migration ก่อนแล้วโค้ดเก่ายังรันอยู่ ปกติจะไม่มีปัญหา เพราะโค้ดเก่า
 แค่ไม่รู้จักตารางใหม่เฉยๆ
+
+**ระวังตอนพิมพ์คำสั่ง migrate ใส่ PRD** เพราะ `.env` ชี้ไป UAT เป็นค่าตั้งต้น การรัน PRD
+ต้องใส่ `DATABASE_URL=` นำหน้าทุกครั้ง ถ้าลืมคือรันใส่ UAT ซ้ำ (ซึ่งไม่เสียหาย เพราะตัวรันจะ
+บอกว่าไม่มีอะไรต้องรัน) แต่ผลคือ PRD ไม่ได้อัปเดตจริงแล้วเว็บพังหลัง deploy
 
 ---
 
@@ -105,9 +141,9 @@ Vercel deploy ขึ้น Production อัตโนมัติ
 บน UAT ถ้าจะทดสอบบน UAT ให้ยิงเองด้วย `curl` พร้อมแนบ header
 `Authorization: Bearer <CRON_SECRET ของ UAT>` หรือใช้ปุ่มจำลอง timeout ในหน้าออเดอร์
 
-**ห้ามก๊อปข้อมูลจริงมาใส่ UAT ทั้งดุ้น** ข้อมูลผู้ใช้จริงเป็นข้อมูลส่วนบุคคลตาม PDPA
+**ห้ามก๊อปข้อมูลจริงจาก PRD มาใส่ UAT ทั้งดุ้น** ข้อมูลผู้ใช้จริงเป็นข้อมูลส่วนบุคคลตาม PDPA
 ถ้าจำเป็นต้องใช้ข้อมูลปริมาณมากเพื่อทดสอบ ต้องสุ่มเปลี่ยนชื่อ อีเมล เบอร์โทรให้หมดก่อน
-วิธีที่ง่ายกว่าคือใช้ `npm run seed` สร้างข้อมูลปลอมขึ้นมาใหม่
+วิธีที่ง่ายกว่าคือใช้ `npm run seed` สร้างข้อมูลปลอมขึ้นมาใหม่บน UAT
 
 **Storage bucket แยกกันโดยอัตโนมัติ** เพราะเป็นคนละ Supabase project รูปที่อัปโหลดบน UAT
 จะไม่ไปโผล่บน PRD
