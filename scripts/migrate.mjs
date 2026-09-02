@@ -79,23 +79,33 @@ const client = new pg.Client({ connectionString });
 await client.connect();
 
 try {
-  // ตารางนี้คือสมุดบันทึกว่ารันอะไรไปแล้ว เก็บ checksum ไว้ด้วยเพื่อจับกรณีที่มีคนแก้ไฟล์เก่า
-  // ที่รันไปแล้ว ซึ่งเป็นสิ่งต้องห้าม เพราะฐานข้อมูลที่รันไฟล์เวอร์ชันเดิมไปแล้วจะไม่เปลี่ยนตาม
-  await client.query(`
-    create table if not exists schema_migrations (
-      filename text primary key,
-      checksum text not null,
-      applied_at timestamptz not null default now()
-    );
-  `);
+  // โหมด status ต้องไม่เขียนอะไรลงฐานข้อมูลเลยแม้แต่ตารางบันทึกของตัวเอง — เพราะเป็นคำสั่งที่
+  // ใช้ "ส่องดูก่อนตัดสินใจ" กับฐานข้อมูลที่ยังไม่แน่ใจว่าใช่ตัวที่ต้องการหรือเปล่า ถ้ามันแอบสร้าง
+  // ตารางทิ้งไว้ ก็เท่ากับแตะฐานข้อมูลที่อาจจะเป็นตัวผิด
+  const readOnly = mode === "status";
+  const tableExists =
+    (await client.query("select to_regclass('public.schema_migrations') as t")).rows[0].t !== null;
 
-  // ทุกตารางใน public schema ถูก Supabase เปิดให้เข้าถึงผ่าน PostgREST โดยอัตโนมัติ ถ้าไม่เปิด
-  // RLS ตารางนี้จะกลายเป็นตารางเดียวในระบบที่ anon key อ่านได้ ขัดกับหลัก default-deny ที่
-  // migration 005 วางไว้ให้ทุกตาราง (เนื้อหาไม่ใช่ความลับ แต่ไม่มีเหตุผลให้เปิดเผย)
-  // ตัวรันเองไม่กระทบ เพราะต่อผ่าน postgres ซึ่งเป็นเจ้าของตาราง และเจ้าของข้าม RLS ได้อยู่แล้ว
-  await client.query("alter table schema_migrations enable row level security;");
+  if (!readOnly && !tableExists) {
+    // สมุดบันทึกว่ารันอะไรไปแล้ว เก็บ checksum ไว้ด้วยเพื่อจับกรณีที่มีคนแก้ไฟล์เก่าที่รันไปแล้ว
+    // ซึ่งเป็นสิ่งต้องห้าม เพราะฐานข้อมูลที่รันไฟล์เวอร์ชันเดิมไปแล้วจะไม่เปลี่ยนตาม
+    await client.query(`
+      create table schema_migrations (
+        filename text primary key,
+        checksum text not null,
+        applied_at timestamptz not null default now()
+      );
+    `);
+    // ทุกตารางใน public schema ถูก Supabase เปิดให้เข้าถึงผ่าน PostgREST โดยอัตโนมัติ ถ้าไม่เปิด
+    // RLS ตารางนี้จะกลายเป็นตารางเดียวในระบบที่ anon key อ่านได้ ขัดกับหลัก default-deny ที่
+    // migration 005 วางไว้ให้ทุกตาราง (เนื้อหาไม่ใช่ความลับ แต่ไม่มีเหตุผลให้เปิดเผย)
+    // ตัวรันเองไม่กระทบ เพราะต่อผ่าน postgres ซึ่งเป็นเจ้าของตาราง และเจ้าของข้าม RLS ได้อยู่แล้ว
+    await client.query("alter table schema_migrations enable row level security;");
+  }
 
-  const { rows: appliedRows } = await client.query("select filename, checksum from schema_migrations");
+  const appliedRows = tableExists
+    ? (await client.query("select filename, checksum from schema_migrations")).rows
+    : [];
   const applied = new Map(appliedRows.map((r) => [r.filename, r.checksum]));
   const migrations = readMigrations();
 
