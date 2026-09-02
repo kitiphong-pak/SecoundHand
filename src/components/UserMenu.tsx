@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import type { PublicUser } from "@/lib/auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LogoutButton } from "@/components/LogoutButton";
@@ -81,6 +82,13 @@ export function UserMenu({
           role="menu"
           className="absolute right-0 top-full z-20 mt-2 w-48 rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-1.5 shadow-lg"
         >
+          <Link
+            href="/profile"
+            onClick={() => setOpen(false)}
+            className="block rounded-[var(--radius-md)] px-2.5 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100"
+          >
+            โปรไฟล์ของฉัน
+          </Link>
           <div className="flex items-center justify-between rounded-[var(--radius-md)] px-2.5 py-1.5 text-sm text-neutral-700">
             <span>โหมดสว่าง/มืด</span>
             <ThemeToggle />

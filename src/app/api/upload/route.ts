@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { saveImage } from "@/lib/storage";
+import { saveImage, type ImageKind } from "@/lib/storage";
 
 const MAX_DATA_URL_CHARS = 3_000_000; // ~2.2MB หลัง decode — กันไฟล์ที่ client ไม่ได้บีบอัดมา
 
@@ -10,6 +10,7 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => null);
   const dataUrl = String(body?.image ?? "");
+  const kind: ImageKind = body?.kind === "avatar" ? "avatar" : "product";
   if (!dataUrl.startsWith("data:image/")) {
     return NextResponse.json({ error: "ไฟล์รูปภาพไม่ถูกต้อง" }, { status: 400 });
   }
@@ -18,7 +19,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const url = await saveImage(dataUrl);
+    const url = await saveImage(dataUrl, kind);
     return NextResponse.json({ url }, { status: 201 });
   } catch (e) {
     const message = e instanceof Error ? e.message : "อัปโหลดรูปภาพไม่สำเร็จ";
