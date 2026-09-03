@@ -98,7 +98,7 @@ export function Header({ user }: { user: PublicUser }) {
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3">
           <div className="flex items-center gap-6">
             <Link href="/" className="font-[var(--font-display)] text-lg font-semibold text-primary-600">
-              SecoundHand
+              songtor
             </Link>
             <nav className="hidden items-center gap-4 text-sm text-neutral-600 sm:flex">
               {NAV_LINKS.map((link) => (

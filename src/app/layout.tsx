@@ -28,7 +28,7 @@ const notoSansThai = Noto_Sans_Thai({
 });
 
 export const metadata: Metadata = {
-  title: "SecoundHand — ตลาดของมือสองใกล้คุณ",
+  title: "songtor — ตลาดของมือสองใกล้คุณ",
   description: "ซื้อขายของมือสองออนไลน์ ปลอดภัยด้วยระบบยืนยัน OTP สองฝ่าย",
 };
 

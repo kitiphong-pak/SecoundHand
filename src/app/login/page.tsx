@@ -49,7 +49,7 @@ export default function LoginPage() {
           เข้าสู่ระบบ
         </h1>
         <p className="mt-2 text-sm text-neutral-500">
-          ยินดีต้อนรับกลับมาที่ SecoundHand
+          ยินดีต้อนรับกลับมาที่ songtor
         </p>
 
         <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">

@@ -106,7 +106,7 @@ export function AdminShell({ user, children }: { user: PublicUser; children: Rea
           href="/admin"
           className="font-[var(--font-display)] text-lg font-semibold text-primary-600"
         >
-          SecoundHand
+          songtor
         </Link>
         <p className="mt-0.5 text-xs text-neutral-400">ผู้ดูแลระบบ</p>
 
@@ -171,7 +171,7 @@ export function AdminShell({ user, children }: { user: PublicUser; children: Rea
             href="/admin"
             className="font-[var(--font-display)] text-lg font-semibold text-primary-600 sm:hidden"
           >
-            SecoundHand
+            songtor
           </Link>
           <div className="flex items-center gap-3">
             <UserMenu user={user} subtitle="ผู้ดูแลระบบ" />
