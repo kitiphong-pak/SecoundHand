@@ -56,11 +56,10 @@ npm run migrate:baseline
 Supabase Dashboard → New project ตั้งชื่อให้แยกออกชัดๆ เช่น `secoundhand-prod`
 เลือก region เดียวกับตัวปัจจุบัน และ**ตั้งรหัสผ่านฐานข้อมูลใหม่ที่ไม่ซ้ำกับตัวเดิม**
 
-จดค่า 4 ตัวไว้:
+จดค่า 3 ตัวไว้:
 
 - `NEXT_PUBLIC_SUPABASE_URL` — Settings → API → Project URL
 - `SUPABASE_SECRET_KEY` — Settings → API → service_role key
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — Settings → API → anon/publishable key
 - `DATABASE_URL` — Settings → Database → Connection string → URI
 
 ### 3. สร้างโครงสร้างฐานข้อมูลให้ PRD
@@ -98,7 +97,6 @@ update users set role = 'admin' where email = 'อีเมลจริงขอ
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | ของ project ใหม่ | ของ project เดิม |
 | `SUPABASE_SECRET_KEY` | ของ project ใหม่ | ของ project เดิม |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | ของ project ใหม่ | ของ project เดิม |
 | `CRON_SECRET` | สุ่มขึ้นมาใหม่ | สุ่มอีกตัวคนละค่า |
 
 ไม่ต้องใส่ `DATABASE_URL` บน Vercel — ตัวแอปไม่ได้ใช้ ใช้เฉพาะตอนรัน migration จากเครื่องเรา
