@@ -32,9 +32,18 @@ export async function POST(
     .from("products")
     .update({ status: "removed" })
     .eq("id", id)
+    // กันคนกดซื้อตัดหน้าพอดีระหว่างที่ผู้ขายกดลบ — ถ้าไม่มีเงื่อนไขนี้ สินค้าจะกลายเป็น removed
+    // ทั้งที่มีออเดอร์ค้างอยู่ และถ้าผู้ซื้อยกเลิกทีหลัง route ยกเลิกจะปลุกประกาศที่ถูกลบกลับมา
+    .eq("status", "listed")
     .select()
-    .single();
-  if (error || !updated) return NextResponse.json({ error: "ลบประกาศไม่สำเร็จ" }, { status: 500 });
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: "ลบประกาศไม่สำเร็จ" }, { status: 500 });
+  if (!updated) {
+    return NextResponse.json(
+      { error: "มีคนกดซื้อสินค้านี้ไปแล้ว ลบประกาศไม่ได้" },
+      { status: 409 }
+    );
+  }
 
   await logAction({
     actorId: user.id,
