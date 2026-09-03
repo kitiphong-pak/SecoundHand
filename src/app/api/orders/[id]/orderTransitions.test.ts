@@ -55,7 +55,10 @@ describe("ชำระเงิน (pending_payment → paid)", () => {
     expect(res.status).toBe(200);
 
     const update = mock.current!.callsTo("orders")[1];
-    expect(hasOp(update, "update", { status: "paid" })).toBe(true);
+    const payload = update.ops.find(([m]) => m === "update")?.[1] as Record<string, unknown>;
+    expect(payload.status).toBe("paid");
+    // ต้องบันทึกเวลาชำระเงินไปพร้อมกันใน UPDATE เดียว ไม่ใช่เขียนตามทีหลังคนละคำสั่ง
+    expect(Number.isFinite(Date.parse(String(payload.paid_at)))).toBe(true);
     expect(hasOp(update, "eq", "status", "pending_payment")).toBe(true);
   });
 

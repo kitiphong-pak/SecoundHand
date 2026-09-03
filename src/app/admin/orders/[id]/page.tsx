@@ -33,6 +33,7 @@ export default async function AdminOrderDetailPage({
 
   const timelineRaw: Array<{ label: string; at: string | undefined }> = [
     { label: "สร้างออเดอร์", at: order.createdAt },
+    { label: "ชำระเงิน", at: order.paidAt },
     { label: "ผู้ขายแจ้งส่งมอบ", at: order.sellerMarkedDeliveredAt },
     { label: "ผู้ซื้อยืนยันรับสินค้า", at: order.buyerConfirmedAt },
     { label: "เปิดข้อพิพาท", at: order.disputeOpenedAt },

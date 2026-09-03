@@ -52,6 +52,7 @@ export interface Order {
   sellerId: string;
   status: OrderStatus;
   amount: number;
+  paidAt?: string;
   otpCode?: string; // สร้างตอนผู้ซื้อกดยืนยันได้รับของ ใช้ครั้งเดียว
   otpExpiresAt?: string;
   sellerMarkedDeliveredAt?: string; // เริ่มนับ timeout รอบที่ 1 (ผู้ซื้อ)

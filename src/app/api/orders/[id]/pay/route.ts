@@ -26,7 +26,7 @@ export async function POST(
 
   const { data: updated, error } = await supabase
     .from("orders")
-    .update({ status: "paid" })
+    .update({ status: "paid", paid_at: new Date().toISOString() })
     .eq("id", id)
     .eq("status", "pending_payment") // กัน request ซ้อนเขียนทับกันถ้าชำระเงินสำเร็จไปแล้วพอดี
     .select()

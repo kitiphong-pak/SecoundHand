@@ -291,7 +291,13 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
         <div className="mt-2 flex flex-col gap-2 rounded-[var(--radius-md)] border border-error-500/30 bg-error-50 p-3">
           <p className="text-sm text-neutral-700">
             ยืนยันยกเลิกคำสั่งซื้อนี้?{" "}
-            {order.status === "paid" && "เงินที่ชำระไปแล้วจะคืนให้ (เดโม)"}
+            {order.status === "paid" &&
+              (order.paidAt
+                ? `เงินที่ชำระเมื่อ ${new Date(order.paidAt).toLocaleString("th-TH", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  })} จะคืนให้ (เดโม)`
+                : "เงินที่ชำระไปแล้วจะคืนให้ (เดโม)")}
           </p>
           <div className="flex gap-2">
             <Button
