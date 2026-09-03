@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import type { PublicUser } from "@/lib/auth";
 import { UserMenu } from "@/components/UserMenu";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 import {
   AnalyticsIcon,
   ShoppingBagIcon,
@@ -102,11 +103,8 @@ export function AdminShell({ user, children }: { user: PublicUser; children: Rea
           ความสูงของตัวเองตรงๆ ไม่งั้น flex row จะ stretch ให้สูงเท่าคอลัมน์เนื้อหาทางขวา
           (ซึ่งยาวกว่ามาก) จนมีช่องว่างมหาศาลก่อนถึงปุ่มตั้งค่า/ออกจากระบบด้านล่าง */}
       <aside className="sticky top-0 hidden h-screen w-60 flex-none flex-col overflow-y-auto border-r border-neutral-200 bg-neutral-0 p-5 sm:flex">
-        <Link
-          href="/admin"
-          className="font-[var(--font-display)] text-lg font-semibold text-primary-600"
-        >
-          songtor
+        <Link href="/admin" aria-label="songtor" className="flex items-center">
+          <BrandLogo className="h-7" />
         </Link>
         <p className="mt-0.5 text-xs text-neutral-400">ผู้ดูแลระบบ</p>
 
@@ -167,11 +165,8 @@ export function AdminShell({ user, children }: { user: PublicUser; children: Rea
 
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center justify-between gap-3 border-b border-neutral-200 bg-neutral-0 px-5 py-3 sm:justify-end">
-          <Link
-            href="/admin"
-            className="font-[var(--font-display)] text-lg font-semibold text-primary-600 sm:hidden"
-          >
-            songtor
+          <Link href="/admin" aria-label="songtor" className="flex items-center sm:hidden">
+            <BrandLogo className="h-7" />
           </Link>
           <div className="flex items-center gap-3">
             <UserMenu user={user} subtitle="ผู้ดูแลระบบ" />

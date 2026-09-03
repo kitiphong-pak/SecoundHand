@@ -138,3 +138,26 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
+
+/* โลโก้ navbar มีสองไฟล์ เพราะตัวอักษร "songtor" ในต้นฉบับเป็นสีน้ำเงินเขียวเข้ม ซึ่งอ่านแทบ
+   ไม่ออกบนแถบสีเข้มของโหมดมืด (--neutral-0 = #161b22) ไฟล์ logo-dark จึงเปลี่ยนเฉพาะสี
+   ตัวอักษรเป็นโทนสว่าง ส่วนไอคอนมือสีส้มใช้ร่วมกันทั้งสองธีม
+   กติกาการสลับเรียงลำดับเหมือนตัวแปรสีด้านบนเป๊ะ — media query มาก่อน แล้ว data-theme ปิดท้าย
+   เพื่อให้การกดเลือกธีมเองชนะการตั้งค่าของระบบเสมอ (specificity เท่ากัน ลำดับในไฟล์เป็นตัวตัดสิน) */
+.logo-theme-dark {
+  display: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .logo-theme-light {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .logo-theme-dark {
+    display: block;
+  }
+}
+:root[data-theme="dark"] .logo-theme-light {
+  display: none;
+}
+:root[data-theme="dark"] .logo-theme-dark {
+  display: block;
+}

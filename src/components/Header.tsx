@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { PublicUser } from "@/lib/auth";
 import { UserMenu } from "@/components/UserMenu";
+import { BrandLogo } from "@/components/ui/BrandLogo";
 import { LocationPinIcon } from "@/components/ui/LocationPinIcon";
 import { HomeIcon, InventoryIcon, ListIcon, ChatIcon } from "@/components/ui/NavIcons";
 
@@ -97,8 +98,8 @@ export function Header({ user }: { user: PublicUser }) {
       <header className="border-b border-neutral-200 bg-neutral-0">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3">
           <div className="flex items-center gap-6">
-            <Link href="/" className="font-[var(--font-display)] text-lg font-semibold text-primary-600">
-              songtor
+            <Link href="/" aria-label="songtor" className="flex flex-none items-center">
+              <BrandLogo className="h-7" />
             </Link>
             <nav className="hidden items-center gap-4 text-sm text-neutral-600 sm:flex">
               {NAV_LINKS.map((link) => (
