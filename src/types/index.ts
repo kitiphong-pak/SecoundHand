@@ -52,6 +52,12 @@ export interface Order {
   sellerId: string;
   status: OrderStatus;
   amount: number;
+  /** อัตราค่าธรรมเนียมที่ใช้กับออเดอร์นี้ ณ ตอนสร้าง — ออเดอร์เก่าจำอัตราเดิมของตัวเองไว้ */
+  feeRate: number;
+  /** ส่วนที่แพลตฟอร์มหัก */
+  platformFee: number;
+  /** ส่วนที่ผู้ขายได้รับ = amount - platformFee */
+  sellerPayout: number;
   paidAt?: string;
   otpCode?: string; // สร้างตอนผู้ซื้อกดยืนยันได้รับของ ใช้ครั้งเดียว
   otpExpiresAt?: string;

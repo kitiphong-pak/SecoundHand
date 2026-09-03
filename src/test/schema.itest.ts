@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { startTestDb, migrationFiles, type TestDb } from "@/test/pgContainer";
+import { calculateFees } from "@/lib/fees";
 
 // เทสชั้นกลาง — Postgres จริงในคอนเทนเนอร์ ไม่ใช่ mock
 //
@@ -134,5 +135,85 @@ describe("index กันขายสินค้าชิ้นเดียว�
         [product.id, buyer.id, seller.id]
       )
     ).resolves.toBeDefined();
+  });
+});
+
+describe("ค่าธรรมเนียมในฐานข้อมูล (migration 015)", () => {
+  const seed = async () => {
+    await db.truncateAll();
+    const [seller] = await q<{ id: string }>(
+      `insert into users (name, email, password_hash, province) values ('ผู้ขาย','s@x.com','h','เชียงใหม่') returning id`
+    );
+    const [buyer] = await q<{ id: string }>(
+      `insert into users (name, email, password_hash, province) values ('ผู้ซื้อ','b@x.com','h','เชียงใหม่') returning id`
+    );
+    const [product] = await q<{ id: string }>(
+      `insert into products (seller_id, title, description, price, category, condition, province)
+       values ($1,'จักรยาน','ดี',1000,'กีฬา','good','เชียงใหม่') returning id`,
+      [seller.id]
+    );
+    return { seller, buyer, product };
+  };
+
+  type Ids = Awaited<ReturnType<typeof seed>>;
+
+  const insertOrder = (ids: Ids, amount: number, fee: number, rate = 0.05) =>
+    q<{ seller_payout: string }>(
+      `insert into orders (product_id, buyer_id, seller_id, status, amount, fee_rate, platform_fee)
+       values ($1,$2,$3,'pending_payment',$4,$5,$6) returning seller_payout`,
+      [ids.product.id, ids.buyer.id, ids.seller.id, amount, rate, fee]
+    );
+
+  it("ฐานข้อมูลคำนวณยอดผู้ขายให้เอง ไม่ต้องส่งเข้าไป", async () => {
+    const ids = await seed();
+    const [row] = await insertOrder(ids, 1000, 50);
+    expect(Number(row.seller_payout)).toBe(950);
+  });
+
+  it("เขียนทับยอดผู้ขายตรงๆ ไม่ได้ เพราะเป็นคอลัมน์คำนวณ", async () => {
+    const ids = await seed();
+    await expect(
+      q(
+        `insert into orders (product_id, buyer_id, seller_id, status, amount, platform_fee, seller_payout)
+         values ($1,$2,$3,'pending_payment',1000,50,999999)`,
+        [ids.product.id, ids.buyer.id, ids.seller.id]
+      )
+    ).rejects.toThrow();
+  });
+
+  it("ค่าธรรมเนียมเกินยอดที่ผู้ซื้อจ่ายไม่ได้ (ผู้ขายจะได้ยอดติดลบ)", async () => {
+    const ids = await seed();
+    await expect(insertOrder(ids, 1000, 1500)).rejects.toThrow();
+  });
+
+  it("ค่าธรรมเนียมติดลบไม่ได้", async () => {
+    const ids = await seed();
+    await expect(insertOrder(ids, 1000, -50)).rejects.toThrow();
+  });
+
+  it("อัตราค่าธรรมเนียมเกิน 100% ไม่ได้", async () => {
+    const ids = await seed();
+    await expect(insertOrder(ids, 1000, 50, 1.5)).rejects.toThrow();
+  });
+
+  it("ออเดอร์เก่าที่ไม่ได้ระบุค่าธรรมเนียม ผู้ขายได้เต็มจำนวน", async () => {
+    const ids = await seed();
+    const [row] = await q<{ seller_payout: string; platform_fee: string }>(
+      `insert into orders (product_id, buyer_id, seller_id, status, amount)
+       values ($1,$2,$3,'pending_payment',1000) returning seller_payout, platform_fee`,
+      [ids.product.id, ids.buyer.id, ids.seller.id]
+    );
+    expect(Number(row.platform_fee)).toBe(0);
+    expect(Number(row.seller_payout)).toBe(1000);
+  });
+
+  it("ทุกยอดที่ calculateFees คำนวณ ฐานข้อมูลให้ผลตรงกันเป๊ะ", async () => {
+    const ids = await seed();
+    for (const amount of [333, 999.99, 1, 7, 12345.67, 89.99]) {
+      const f = calculateFees(amount);
+      await q(`delete from orders`);
+      const [row] = await insertOrder(ids, f.amount, f.platformFee, f.feeRate);
+      expect(Number(row.seller_payout)).toBe(f.sellerPayout);
+    }
   });
 });

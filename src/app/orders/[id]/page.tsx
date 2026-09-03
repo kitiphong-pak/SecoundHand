@@ -78,6 +78,27 @@ export default async function OrderDetailPage({
               ฿{order.amount.toLocaleString("th-TH")}
             </span>
           </div>
+          {/* ผู้ขายต้องเห็นว่าจะได้รับจริงเท่าไหร่ ไม่ใช่เห็นแค่ยอดที่ผู้ซื้อจ่ายแล้วไปเซอร์ไพรส์
+              ตอนเงินเข้า — ฝั่งผู้ซื้อไม่ต้องเห็น เพราะเขาจ่ายเท่ากันไม่ว่าแพลตฟอร์มหักเท่าไหร่ */}
+          {role === "seller" && order.platformFee > 0 && (
+            <>
+              <div className="mt-1 flex items-center justify-between text-sm">
+                <span className="text-neutral-500">
+                  ค่าธรรมเนียมแพลตฟอร์ม ({(order.feeRate * 100).toLocaleString("th-TH")}%)
+                </span>
+                <span className="text-neutral-500">
+                  -฿{order.platformFee.toLocaleString("th-TH")}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between border-t border-neutral-100 pt-2 text-sm">
+                <span className="text-neutral-500">ยอดที่คุณจะได้รับ</span>
+                <span className="font-[var(--font-display)] font-medium text-success-500">
+                  ฿{order.sellerPayout.toLocaleString("th-TH")}
+                </span>
+              </div>
+            </>
+          )}
+
           <div className="mt-1 flex items-center justify-between text-sm">
             <span className="text-neutral-500">{role === "buyer" ? "ผู้ขาย" : "ผู้ซื้อ"}</span>
             <span className="text-neutral-900">

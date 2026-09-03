@@ -73,6 +73,16 @@ describe("POST /api/orders — กันขายซ้ำ", () => {
     expect(res.status).toBe(201);
 
     // นี่คือหัวใจของการกันขายซ้ำ ถ้าเงื่อนไขนี้หายไปเมื่อไหร่ สองคนจะจองสำเร็จพร้อมกันได้
+    // ค่าธรรมเนียมต้องถูกคิดและเก็บตั้งแต่ตอนสร้างออเดอร์ ไม่ใช่ไปคำนวณเอาตอนแสดงผล
+    const insert = mock.current!.callsTo("orders")[0];
+    const payload = insert.ops.find(([m]) => m === "insert")?.[1] as Record<string, unknown>;
+    expect(payload.amount).toBe(3500);
+    expect(payload.platform_fee).toBe(175);
+    expect(payload.fee_rate).toBe(0.05);
+    // ห้ามส่ง seller_payout เข้าไป เพราะเป็นคอลัมน์ generated — ฐานข้อมูลจะปฏิเสธทันที
+    // และการที่แอปไม่ส่งคือสิ่งที่ทำให้ยอดผู้ขายมีนิยามเดียวตลอดทั้งระบบ
+    expect(payload).not.toHaveProperty("seller_payout");
+
     const reserve = mock.current!.callsTo("products")[1];
     expect(hasOp(reserve, "update", { status: "reserved" })).toBe(true);
     expect(hasOp(reserve, "eq", "status", "listed")).toBe(true);
