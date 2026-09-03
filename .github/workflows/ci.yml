@@ -30,6 +30,12 @@ jobs:
       - name: Test
         run: npm test
 
+      # เทสที่รัน Postgres จริงในคอนเทนเนอร์ — ตัวเดียวที่พิสูจน์ว่าไฟล์ใน supabase/migrations
+      # รันผ่านจริงจากฐานข้อมูลเปล่า เทสที่เหลือ mock ฐานข้อมูลไว้หมดจึงมองไม่เห็นชั้นนี้เลย
+      # runner ของ GitHub มี Docker ให้อยู่แล้ว ไม่ต้องติดตั้งเพิ่ม
+      - name: Database tests
+        run: npm run test:db
+
       # ขั้นนี้จับ error ที่โผล่เฉพาะตอน build จริง ซึ่ง lint/tsc มองไม่เห็น เช่นเผลอ import
       # โมดูลฝั่งเซิร์ฟเวอร์เข้าไปใน Client Component
       #

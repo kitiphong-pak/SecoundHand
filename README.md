@@ -72,6 +72,7 @@ npm run dev
 | `npm run lint` | eslint |
 | `npm run typecheck` | สร้าง route types ของ Next แล้วตรวจ TypeScript |
 | `npm test` | รันเทสด้วย Vitest |
+| `npm run test:db` | เทสที่รัน Postgres จริงในคอนเทนเนอร์ (ต้องเปิด Docker) |
 | `npm run migrate` | รัน migration ที่ยังไม่เคยรัน (ปลายทาง UAT) |
 | `npm run migrate:status` | ดูว่าไฟล์ไหนรันแล้ว — อ่านอย่างเดียว ไม่แก้อะไร |
 | `npm run migrate:prd` | เหมือน `migrate` แต่ปลายทางคือ PRD |
@@ -112,5 +113,9 @@ npm test
 ครอบคลุมตรรกะใน `src/lib/` และ API route ที่ความผิดพลาดมีราคาแพง — การกันขายสินค้าซ้ำ,
 การเปลี่ยนสถานะออเดอร์ที่แข่งกัน, การเช็คสิทธิ์เข้าถึงข้อมูลของผู้ใช้คนอื่น
 
+เทสส่วนใหญ่ mock ฐานข้อมูลไว้ จึงเร็วมากแต่ตอบได้แค่ว่า "ถ้าฐานข้อมูลตอบแบบนี้ โค้ดตัดสินใจ
+ถูกไหม" อีกชุดหนึ่ง (`npm run test:db`) ปลุก Postgres จริงในคอนเทนเนอร์แล้วรันไฟล์ migration
+ทุกไฟล์จากฐานข้อมูลเปล่า เพื่อพิสูจน์ว่า SQL ใช้ได้จริง — ต้องเปิด Docker ไว้
+
 ทุก push ขึ้น `main`/`develop` และทุก pull request จะถูกตรวจด้วย GitHub Actions
-4 ขั้น: lint → typecheck → test → build
+5 ขั้น: lint → typecheck → test → database tests → build
