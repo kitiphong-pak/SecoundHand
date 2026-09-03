@@ -1,26 +1,163 @@
 @import "tailwindcss";
 
+/* โทนสีของทั้งแอปมาจากชุด token เดียวกันหมด (neutral/primary/semantic) ผ่าน utility
+   class ของ Tailwind เช่น bg-neutral-50, text-neutral-900 ฯลฯ เลยสลับเป็นโหมดมืดได้
+   แค่เปลี่ยนค่าตัวแปรตรงนี้ที่เดียว ไม่ต้องไปเติม dark: ในทุกไฟล์คอมโพเนนต์
+   ปุ่มสลับธีมอยู่ที่ src/components/ThemeToggle.tsx, สคริปต์กันหน้าจอกะพริบตอนโหลด
+   (อ่านค่าที่เคยเลือกไว้จาก localStorage มาตั้ง data-theme ก่อน hydrate) อยู่ที่ src/app/layout.tsx */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f9fafb;
+  --foreground: #111827;
+
+  --neutral-0: #ffffff;
+  --neutral-50: #f9fafb;
+  --neutral-100: #f3f4f6;
+  --neutral-200: #e5e7eb;
+  --neutral-300: #d1d5db;
+  --neutral-400: #9ca3af;
+  --neutral-500: #6b7280;
+  --neutral-600: #4b5563;
+  --neutral-700: #374151;
+  --neutral-800: #1f2937;
+  --neutral-900: #111827;
+
+  --primary-50: #eef2ff;
+  --primary-100: #e0e7ff;
+  --primary-200: #c7d2fe;
+
+  --success-50: #f0fdf4;
+  --warning-50: #fffbeb;
+  --error-50: #fef2f2;
+  --info-50: #f0f9ff;
+}
+
+/* ค่าโหมดมืดตั้งซ้ำสองที่: ตามการตั้งค่าระบบ (ยังไม่เคยกดเลือกเอง) กับตอนกดเลือก
+   "มืด" ไว้ตรงๆ ผ่าน data-theme (ต้องชนะการตั้งค่าระบบเสมอไม่ว่าระบบจะเป็นโหมดไหน) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #0d1117;
+    --foreground: #f0f6fc;
+
+    --neutral-0: #161b22;
+    --neutral-50: #0d1117;
+    --neutral-100: #1c2129;
+    --neutral-200: #30363d;
+    --neutral-300: #3d444d;
+    --neutral-400: #6e7681;
+    --neutral-500: #8b949e;
+    --neutral-600: #9ea7b3;
+    --neutral-700: #c9d1d9;
+    --neutral-800: #dde3ea;
+    --neutral-900: #f0f6fc;
+
+    --primary-50: #1a1f3d;
+    --primary-100: #242b57;
+    --primary-200: #33396e;
+
+    --success-50: #122a1c;
+    --warning-50: #2b220c;
+    --error-50: #2d1316;
+    --info-50: #0c2433;
+  }
+}
+
+:root[data-theme="dark"] {
+  --background: #0d1117;
+  --foreground: #f0f6fc;
+
+  --neutral-0: #161b22;
+  --neutral-50: #0d1117;
+  --neutral-100: #1c2129;
+  --neutral-200: #30363d;
+  --neutral-300: #3d444d;
+  --neutral-400: #6e7681;
+  --neutral-500: #8b949e;
+  --neutral-600: #9ea7b3;
+  --neutral-700: #c9d1d9;
+  --neutral-800: #dde3ea;
+  --neutral-900: #f0f6fc;
+
+  --primary-50: #1a1f3d;
+  --primary-100: #242b57;
+  --primary-200: #33396e;
+
+  --success-50: #122a1c;
+  --warning-50: #2b220c;
+  --error-50: #2d1316;
+  --info-50: #0c2433;
 }
 
 @theme inline {
+  --font-sans: var(--font-noto-sans-thai);
+  --font-display: var(--font-prompt);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* primary — same indigo scale used in the Figma design system (ค่าเข้ม 500-700 คงที่
+     ทั้งสองธีมเพราะสีสด อ่านง่ายอยู่แล้วทั้งบนพื้นสว่าง/มืด มีแค่โทนอ่อน 50-200 ที่ต้องสลับ) */
+  --color-primary-50: var(--primary-50);
+  --color-primary-100: var(--primary-100);
+  --color-primary-200: var(--primary-200);
+  --color-primary-500: #4f46e5;
+  --color-primary-600: #4338ca;
+  --color-primary-700: #3730a3;
+
+  /* neutral */
+  --color-neutral-0: var(--neutral-0);
+  --color-neutral-50: var(--neutral-50);
+  --color-neutral-100: var(--neutral-100);
+  --color-neutral-200: var(--neutral-200);
+  --color-neutral-300: var(--neutral-300);
+  --color-neutral-400: var(--neutral-400);
+  --color-neutral-500: var(--neutral-500);
+  --color-neutral-600: var(--neutral-600);
+  --color-neutral-700: var(--neutral-700);
+  --color-neutral-800: var(--neutral-800);
+  --color-neutral-900: var(--neutral-900);
+
+  /* semantic (ค่าสด 500 คงที่ทั้งสองธีมเหมือน primary มีแค่โทนอ่อน 50 ที่ใช้เป็นพื้นหลัง
+     ป้าย/กล่องแจ้งเตือนที่ต้องสลับเป็นโทนเข้มแบบมีสีในโหมดมืด) */
+  --color-success-50: var(--success-50);
+  --color-success-500: #16a34a;
+  --color-warning-50: var(--warning-50);
+  --color-warning-500: #d97706;
+  --color-error-50: var(--error-50);
+  --color-error-500: #dc2626;
+  --color-info-50: var(--info-50);
+  --color-info-500: #0284c7;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* โลโก้ navbar มีสองไฟล์ เพราะตัวอักษร "songtor" ในต้นฉบับเป็นสีน้ำเงินเขียวเข้ม ซึ่งอ่านแทบ
+   ไม่ออกบนแถบสีเข้มของโหมดมืด (--neutral-0 = #161b22) ไฟล์ logo-dark จึงเปลี่ยนเฉพาะสี
+   ตัวอักษรเป็นโทนสว่าง ส่วนไอคอนมือสีส้มใช้ร่วมกันทั้งสองธีม
+   กติกาการสลับเรียงลำดับเหมือนตัวแปรสีด้านบนเป๊ะ — media query มาก่อน แล้ว data-theme ปิดท้าย
+   เพื่อให้การกดเลือกธีมเองชนะการตั้งค่าของระบบเสมอ (specificity เท่ากัน ลำดับในไฟล์เป็นตัวตัดสิน) */
+.logo-theme-dark {
+  display: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .logo-theme-light {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .logo-theme-dark {
+    display: block;
+  }
+}
+:root[data-theme="dark"] .logo-theme-light {
+  display: none;
+}
+:root[data-theme="dark"] .logo-theme-dark {
+  display: block;
 }
