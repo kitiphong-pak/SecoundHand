@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { SYSTEM_USER_ID } from "@/lib/systemUser";
 import { mapUser } from "@/lib/mappers";
 import { Badge } from "@/components/ui/Badge";
 import { UserAdminActions } from "@/components/UserAdminActions";
@@ -26,7 +27,9 @@ export default async function AdminUsersPage({
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  let query = supabase.from("users").select("*", { count: "exact" });
+  // บัญชีระบบไม่ใช่คน จึงไม่ควรโผล่ให้แอดมินกดยืนยันตัวตนหรือระงับได้ (การระงับไม่ทำให้ cron
+  // พัง เพราะมันไม่ได้ล็อกอิน แต่เป็นปุ่มที่ไม่ควรมีอยู่ตั้งแต่แรก) — ตัดออกจากทั้งรายการและยอดนับ
+  let query = supabase.from("users").select("*", { count: "exact" }).neq("id", SYSTEM_USER_ID);
   if (q) {
     const escaped = escapeForOrFilter(q);
     query = query.or(`name.ilike."%${escaped}%",email.ilike."%${escaped}%"`);

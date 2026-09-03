@@ -1,14 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { completeOrder, OrderStateConflictError } from "@/lib/orderCompletion";
 import { BUYER_CONFIRM_WINDOW_MS } from "@/lib/orderTiming";
-
-// ผู้ใช้ระบบสำหรับแปะเป็น actor ของ audit log เมื่อ action เกิดจาก cron ไม่ใช่คนกดจริง
-// (สร้างไว้แล้วใน supabase/migrations/007_system_actor.sql ด้วย id คงที่ตัวนี้)
-export const SYSTEM_ACTOR = {
-  id: "00000000-0000-0000-0000-000000000001",
-  role: "admin",
-  name: "ระบบอัตโนมัติ",
-};
+import { SYSTEM_ACTOR } from "@/lib/systemUser";
 
 // กวาดปิดออเดอร์ที่เลยกำหนดเวลารอ (buyer ไม่ยืนยันรับของภายใน 3 วัน หรือ seller ไม่กรอก OTP
 // ภายใน 24 ชม.) แบบ "เงียบ = ยอมรับ" ตามหลักการเดียวกับปุ่ม simulate-timeout เดโม แต่ตัวนี้ทำงาน

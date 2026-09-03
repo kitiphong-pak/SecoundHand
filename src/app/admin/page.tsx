@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { SYSTEM_USER_ID } from "@/lib/systemUser";
 import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
 import { BUYER_CONFIRM_WINDOW_MS } from "@/lib/orderTiming";
 import { DonutChart } from "@/components/ui/DonutChart";
@@ -149,10 +150,12 @@ export default async function AdminDashboardPage() {
     { count: disputedCount },
     { data: recentOrderRows },
   ] = await Promise.all([
-    supabase.from("users").select("*", { count: "exact", head: true }),
-    supabase.from("users").select("*", { count: "exact", head: true }).eq("is_verified", true),
-    supabase.from("users").select("*", { count: "exact", head: true }).eq("is_suspended", true),
-    supabase.from("users").select("created_at").gte("created_at", FOURTEEN_DAYS_AGO),
+    // ทุก query ที่นับหรือดึงผู้ใช้ต้องตัดบัญชีระบบออก ไม่งั้นสถิติจะเกินจริง 1 ตลอดไป
+    // และฐานข้อมูลที่ยังไม่มีใครสมัครเลยจะขึ้นว่ามีผู้ใช้ 1 คน
+    supabase.from("users").select("*", { count: "exact", head: true }).neq("id", SYSTEM_USER_ID),
+    supabase.from("users").select("*", { count: "exact", head: true }).eq("is_verified", true).neq("id", SYSTEM_USER_ID),
+    supabase.from("users").select("*", { count: "exact", head: true }).eq("is_suspended", true).neq("id", SYSTEM_USER_ID),
+    supabase.from("users").select("created_at").gte("created_at", FOURTEEN_DAYS_AGO).neq("id", SYSTEM_USER_ID),
     supabase.from("products").select("*", { count: "exact", head: true }),
     supabase.from("products").select("*", { count: "exact", head: true }).eq("status", "listed"),
     supabase.from("products").select("*", { count: "exact", head: true }).eq("status", "sold"),
