@@ -56,11 +56,36 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
   // ต้อง refresh หน้าเป็นระยะเพื่อดึงสถานะล่าสุด ไม่งั้นต้องกด reload เองถึงจะเห็นการเปลี่ยนแปลง
   const isTerminal =
     order.status === "completed" || order.status === "disputed" || order.status === "cancelled";
+
+  // อีกฝ่ายอาจกดทำอะไรระหว่างที่เราเปิดหน้านี้ค้างไว้ (ผู้ขายแจ้งส่งมอบ, cron ปิดออเดอร์) เลยต้อง
+  // คอยเช็คสถานะ แต่ถามผ่าน endpoint ที่อ่านคอลัมน์เดียวแทนการสั่ง router.refresh() รัวๆ ซึ่งสั่ง
+  // ให้ทั้งหน้า render ใหม่ทุกรอบทั้งที่ส่วนใหญ่ไม่มีอะไรเปลี่ยน — refresh เฉพาะตอนที่สถานะต่างจริง
+  //
+  // และหยุดถามเมื่อผู้ใช้สลับแท็บไปทำอย่างอื่น เพราะไม่มีใครดูอยู่ พอกลับมาค่อยเช็คทันที 1 รอบ
   useEffect(() => {
     if (isTerminal) return;
-    const interval = setInterval(() => router.refresh(), 4000);
-    return () => clearInterval(interval);
-  }, [isTerminal, router]);
+
+    let stopped = false;
+    const check = async () => {
+      if (document.hidden || stopped) return;
+      try {
+        const res = await fetch(`/api/orders/${order.id}/status`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!stopped && data.status !== order.status) router.refresh();
+      } catch {
+        // เน็ตหลุดชั่วคราวไม่ต้องทำอะไร รอบหน้าค่อยลองใหม่
+      }
+    };
+
+    const interval = setInterval(check, 4000);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [isTerminal, router, order.id, order.status]);
 
   return (
     <div className="flex flex-col gap-3">
