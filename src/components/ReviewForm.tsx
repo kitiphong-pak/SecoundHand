@@ -7,16 +7,20 @@ import { Textarea } from "@/components/ui/Textarea";
 
 const STARS = [1, 2, 3, 4, 5];
 
+// สีดาวมาจาก token ของธีมผ่าน currentColor ไม่ใช่ค่าตายตัว — ค่าเดิมที่เขียนไว้ (#d1d5db)
+// คือ --neutral-300 ของธีมสว่าง พอสลับเป็นโหมดมืด ดาวที่ยังไม่เลือกจะเด่นเกินจริง เพราะพื้นหลัง
+// เข้มลงแต่เส้นขอบยังสว่างเท่าเดิม (โหมดมืดควรได้ #3d444d)
 function StarIcon({ filled }: { filled: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
       width={28}
       height={28}
-      fill={filled ? "#d97706" : "none"}
-      stroke={filled ? "#d97706" : "#d1d5db"}
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
       strokeWidth={filled ? 0 : 1.5}
       strokeLinejoin="round"
+      className={filled ? "text-warning-500" : "text-neutral-300"}
     >
       <path d="M12 2.5l2.9 6.3 6.9.7-5.1 4.7 1.4 6.8L12 17.8l-6.1 3.2 1.4-6.8-5.1-4.7 6.9-.7L12 2.5z" />
     </svg>
