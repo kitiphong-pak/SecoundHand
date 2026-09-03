@@ -1,36 +1,116 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# songtor
 
-## Getting Started
+ตลาดซื้อขายของมือสองออนไลน์ เน้นการนัดรับ-ส่งในจังหวัดเดียวกัน ปิดการซื้อขายด้วยการยืนยันสองฝ่าย
+ผ่านรหัส OTP เพื่อลดข้อพิพาทว่า "ส่งของแล้ว/ยังไม่ได้รับของ"
 
-First, run the development server:
+> โปรเจกต์เพื่อการเรียนรู้ ระบบชำระเงินเป็นการจำลอง ไม่มีการตัดเงินจริง
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## ระบบทำอะไรได้
+
+**ฝั่งผู้ใช้** — สมัคร/เข้าสู่ระบบ, ลงขายสินค้าพร้อมรูป, ดูสินค้าเฉพาะในจังหวัดตัวเอง,
+แชทกับผู้ขายรายสินค้า, สั่งซื้อและติดตามสถานะออเดอร์, เปิดข้อพิพาท, ให้คะแนนรีวิว,
+ติดต่อทีมผู้ดูแล, จัดการโปรไฟล์และรหัสผ่าน
+
+**ฝั่งผู้ดูแล** — ภาพรวมสถิติและยอดขาย, ดูสินค้าและออเดอร์ทั้งระบบแบบอ่านอย่างเดียว,
+ตอบข้อความที่ผู้ใช้ติดต่อเข้ามา, จัดการผู้ใช้ (ค้นหา/ยืนยันตัวตน/ระงับบัญชี),
+ตัดสินข้อพิพาท, ดูบันทึกกิจกรรมของระบบ
+
+### เส้นทางของออเดอร์
+
+```
+pending_payment ──▶ paid ──▶ awaiting_buyer_confirmation ──▶ awaiting_otp_entry ──▶ completed
+      │                                    │
+      └──────── cancelled ◀────────────────┴──────── disputed ──▶ (แอดมินตัดสิน)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+ผู้ขายแจ้งส่งมอบ → ผู้ซื้อยืนยันรับของ → ระบบออก OTP ให้ผู้ซื้อ → ผู้ขายกรอก OTP → ปิดการซื้อขาย
+ถ้าฝ่ายใดเงียบเกินกำหนด ระบบปิดออเดอร์ให้อัตโนมัติผ่าน cron (ถือว่า "เงียบ = ยอมรับ")
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## เทคโนโลยี
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| ส่วน | ใช้อะไร |
+|---|---|
+| เฟรมเวิร์ก | Next.js 16 (App Router), React 19, TypeScript |
+| ฐานข้อมูล | Supabase (Postgres) ผ่าน `@supabase/supabase-js` ฝั่งเซิร์ฟเวอร์เท่านั้น |
+| หน้าตา | Tailwind CSS 4 + CSS custom properties (รองรับโหมดสว่าง/มืด) |
+| ล็อกอิน | cookie session ของตัวเอง + bcrypt (ไม่ได้ใช้ Supabase Auth) |
+| เก็บรูป | Supabase Storage |
+| เทส | Vitest |
 
-## Learn More
+## เริ่มใช้งาน
 
-To learn more about Next.js, take a look at the following resources:
+ต้องมี Node.js 22 ขึ้นไป
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm install
+cp .env.example .env      # แล้วกรอกค่าให้ครบ
+npm run migrate           # สร้าง/อัปเดตโครงสร้างฐานข้อมูล
+npm run seed              # ข้อมูลตัวอย่าง (ห้ามรันใส่ฐานข้อมูลจริง)
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+เปิดที่ http://localhost:3000
 
-## Deploy on Vercel
+### ตัวแปรใน .env
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| ตัวแปร | ใช้ทำอะไร |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | URL ของ Supabase project |
+| `SUPABASE_SECRET_KEY` | service_role key — เซิร์ฟเวอร์ใช้คุยกับฐานข้อมูล |
+| `CRON_SECRET` | กันคนอื่นยิง `/api/cron/order-timeouts` |
+| `DATABASE_URL` | ต่อ Postgres ตรงๆ ใช้เฉพาะคำสั่ง `migrate` |
+| `PRD_DATABASE_URL` | เหมือนข้างบนแต่ของ PRD ใช้กับ `migrate:prd` |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+ตัวแอปใช้แค่ 3 ตัวแรก สองตัวล่างเป็นของเครื่องมือ migration ไม่ต้องตั้งบน Vercel
+
+## คำสั่ง
+
+| คำสั่ง | ทำอะไร |
+|---|---|
+| `npm run dev` | รันเซิร์ฟเวอร์สำหรับพัฒนา |
+| `npm run build` | build สำหรับ production |
+| `npm run lint` | eslint |
+| `npm run typecheck` | สร้าง route types ของ Next แล้วตรวจ TypeScript |
+| `npm test` | รันเทสด้วย Vitest |
+| `npm run migrate` | รัน migration ที่ยังไม่เคยรัน (ปลายทาง UAT) |
+| `npm run migrate:status` | ดูว่าไฟล์ไหนรันแล้ว — อ่านอย่างเดียว ไม่แก้อะไร |
+| `npm run migrate:prd` | เหมือน `migrate` แต่ปลายทางคือ PRD |
+| `npm run seed` | ใส่ข้อมูลตัวอย่าง |
+
+## ฐานข้อมูล
+
+โครงสร้างทั้งหมดอยู่ใน `supabase/migrations/` เรียงตามเลขนำหน้า ตั้งแต่ `001_initial_schema.sql`
+ตัวรัน migration จดไว้ในตาราง `schema_migrations` ว่าฐานข้อมูลแต่ละตัวรันถึงไฟล์ไหนแล้ว
+และห่อทุกไฟล์ด้วย transaction — ถ้าพังกลางคันจะย้อนกลับทั้งไฟล์ ไม่เหลือสภาพครึ่งๆ
+
+**ห้ามแก้ไฟล์ migration ที่รันไปแล้ว** ให้สร้างไฟล์ใหม่เลขถัดไปเสมอ ตัวรันเก็บ checksum ไว้
+และจะปฏิเสธถ้าตรวจพบว่าไฟล์เก่าถูกแก้
+
+## Environment
+
+แยกเป็น UAT (ทดสอบ) กับ PRD (ใช้จริง) คนละฐานข้อมูล โดยใช้โค้ดชุดเดียวกัน
+ขั้นตอนตั้งค่าและวิธีทำงานประจำวันอยู่ที่ [docs/environments.md](docs/environments.md)
+
+## โครงสร้างโปรเจกต์
+
+```
+src/app/           หน้าเว็บและ API route (App Router)
+src/components/    React component ที่ใช้ร่วมกัน
+src/lib/           ตรรกะที่ไม่ผูกกับ UI — auth, mapper, สถานะออเดอร์, audit log
+src/test/          ตัวช่วยสำหรับเทส
+supabase/          ไฟล์ migration
+scripts/           เครื่องมือบรรทัดคำสั่ง — migrate, seed
+docs/              เอกสารประกอบ
+```
+
+## เทส
+
+```bash
+npm test
+```
+
+ครอบคลุมตรรกะใน `src/lib/` และ API route ที่ความผิดพลาดมีราคาแพง — การกันขายสินค้าซ้ำ,
+การเปลี่ยนสถานะออเดอร์ที่แข่งกัน, การเช็คสิทธิ์เข้าถึงข้อมูลของผู้ใช้คนอื่น
+
+ทุก push ขึ้น `main`/`develop` และทุก pull request จะถูกตรวจด้วย GitHub Actions
+4 ขั้น: lint → typecheck → test → build
