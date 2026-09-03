@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapProduct, mapOrder } from "@/lib/mappers";
 import { logAction } from "@/lib/auditLog";
+import { calculateFees } from "@/lib/fees";
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
@@ -44,6 +45,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "สินค้านี้ไม่พร้อมขายแล้ว" }, { status: 409 });
   }
 
+  // คิดค่าธรรมเนียมตอนสร้างออเดอร์ครั้งเดียว แล้วเก็บผลลัพธ์ไว้ ไม่คำนวณสดตอนแสดงผล
+  // เพราะถ้าอัตราเปลี่ยนในอนาคต ออเดอร์เก่าต้องยังแสดงตัวเลขเดิมที่ตกลงกันไว้ตอนนั้น
+  const fees = calculateFees(product.price);
+
   const { data: orderRow, error } = await supabase
     .from("orders")
     .insert({
@@ -52,6 +57,9 @@ export async function POST(req: Request) {
       seller_id: product.sellerId,
       status: "pending_payment",
       amount: product.price,
+      fee_rate: fees.feeRate,
+      platform_fee: fees.platformFee,
+      // ไม่ส่ง seller_payout — เป็นคอลัมน์ generated ฐานข้อมูลคำนวณจาก amount - platform_fee ให้เอง
     })
     .select()
     .single();
