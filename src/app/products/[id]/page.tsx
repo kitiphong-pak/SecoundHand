@@ -41,10 +41,11 @@ export default async function ProductDetailPage({
   // โชว์ "รอชำระเงิน" ทั้งที่จ่ายเงิน/ส่งของไปแล้ว (บั๊กเดียวกับที่เจอในหน้าสินค้าของฉัน)
   let activeOrderBadge = null;
   let activeOrderHref: string | null = null;
+  let agreedAmount: number | null = null;
   if (product.status === "reserved") {
     const { data: orderRow } = await supabase
       .from("orders")
-      .select("id, status, buyer_id, seller_id")
+      .select("id, status, buyer_id, seller_id, amount")
       .eq("product_id", product.id)
       .neq("status", "completed")
       .maybeSingle();
@@ -54,7 +55,17 @@ export default async function ProductDetailPage({
     const party =
       orderRow?.buyer_id === user.id ? "buyer" : orderRow?.seller_id === user.id ? "seller" : undefined;
     activeOrderBadge = orderStatusBadge((orderRow?.status as OrderStatus) ?? "pending_payment", party);
-    if (orderRow && party) activeOrderHref = `/orders/${orderRow.id}`;
+    if (orderRow && party) {
+      activeOrderHref = `/orders/${orderRow.id}`;
+
+      // ราคาที่ลงขายกับยอดที่ตกลงกันจริงเป็นคนละตัว ถ้าปิดดีลผ่านการต่อรอง (amount มาจากข้อเสนอ
+      // ที่ตอบรับ ไม่ใช่ price) — หน้านี้โชว์แต่ป้ายราคาเดิม คู่ซื้อขายเลยเห็นเลขไม่ตรงกับในออเดอร์
+      //
+      // โชว์เฉพาะคู่ซื้อขายเท่านั้น เพราะหน้านี้คนนอกก็เปิดดูได้ ยอดที่ต่อรองกันเป็นเรื่องของสองคนนี้
+      // ไม่ใช่ข้อมูลที่ควรติดไว้หน้าร้านให้คนอื่นเห็นว่ากดราคาลงมาได้เท่าไหร่
+      const amount = Number(orderRow.amount);
+      if (Number.isFinite(amount) && amount !== product.price) agreedAmount = amount;
+    }
   }
 
   return (
@@ -75,9 +86,19 @@ export default async function ProductDetailPage({
             )}
           </div>
 
-          <p className="font-[var(--font-display)] text-2xl font-semibold text-primary-600">
-            ฿{product.price.toLocaleString("th-TH")}
-          </p>
+          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <p className="font-[var(--font-display)] text-2xl font-semibold text-primary-600">
+              ฿{(agreedAmount ?? product.price).toLocaleString("th-TH")}
+            </p>
+            {agreedAmount !== null && (
+              <>
+                <p className="text-sm text-neutral-400 line-through">
+                  ฿{product.price.toLocaleString("th-TH")}
+                </p>
+                <span className="text-xs text-neutral-500">ราคาที่ตกลงกัน</span>
+              </>
+            )}
+          </div>
 
           <div className="flex flex-wrap gap-2 text-xs text-neutral-500">
             <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-1">
