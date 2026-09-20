@@ -79,7 +79,7 @@ export default async function AdminOrderDetailPage({
           ) : (
             <p className="mt-2 text-sm text-neutral-400">ไม่พบข้อมูลสินค้า (อาจถูกลบ)</p>
           )}
-          <p className="mt-3 font-[var(--font-display)] text-lg font-semibold text-primary-600">
+          <p className="mt-3 text-lg font-bold tracking-[-0.01em] text-price">
             ฿{order.amount.toLocaleString("th-TH")}
           </p>
         </div>

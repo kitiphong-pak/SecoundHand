@@ -22,7 +22,7 @@ export function ProductGallery({ images, title }: { images: string[]; title: str
           alt={title}
           fill
           sizes="(min-width: 640px) 640px, 100vw"
-          className="object-cover"
+          className="product-photo object-cover"
           priority
         />
       </div>
@@ -38,7 +38,7 @@ export function ProductGallery({ images, title }: { images: string[]; title: str
                 i === active ? "border-primary-500" : "border-transparent",
               ].join(" ")}
             >
-              <Image src={src} alt={`${title} รูปที่ ${i + 1}`} fill sizes="64px" className="object-cover" />
+              <Image src={src} alt={`${title} รูปที่ ${i + 1}`} fill sizes="64px" className="product-photo object-cover" />
             </button>
           ))}
         </div>

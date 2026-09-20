@@ -56,7 +56,7 @@ export default async function AdminProductDetailPage({
               </h1>
               {badge && <Badge status={badge.status}>{badge.label}</Badge>}
             </div>
-            <p className="mt-2 font-[var(--font-display)] text-2xl font-semibold text-primary-600">
+            <p className="mt-2 text-2xl font-bold tracking-[-0.01em] text-price">
               ฿{product.price.toLocaleString("th-TH")}
             </p>
             <div className="mt-3 flex flex-wrap gap-2 text-xs text-neutral-500">
@@ -84,7 +84,7 @@ export default async function AdminProductDetailPage({
                 </p>
               </div>
               {seller?.is_verified ? (
-                <Badge status="success">ยืนยันตัวตนแล้ว</Badge>
+                <Badge status="verified">ยืนยันตัวตนแล้ว</Badge>
               ) : (
                 <Badge status="neutral">ยังไม่ยืนยัน</Badge>
               )}

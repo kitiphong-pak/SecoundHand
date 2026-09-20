@@ -61,7 +61,7 @@ export default async function SellerProfilePage({
               </p>
             </div>
             {sellerRow.is_verified ? (
-              <Badge status="success">ยืนยันตัวตนแล้ว ✅</Badge>
+              <Badge status="verified">ยืนยันตัวตนแล้ว</Badge>
             ) : (
               <Badge status="neutral">ยังไม่ยืนยันตัวตน</Badge>
             )}

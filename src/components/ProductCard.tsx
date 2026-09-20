@@ -30,6 +30,7 @@ export function ProductCard({
 }) {
   const cover = product.images[0];
   const badge = STATUS_BADGE[product.status];
+  const isSold = product.status === "sold";
   return (
     <Link
       href={href ?? `/products/${product.id}`}
@@ -37,11 +38,19 @@ export function ProductCard({
     >
       <div className="relative">
         {cover ? (
-          <div className="relative h-36 w-full">
-            <Image src={cover} alt={product.title} fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover" />
+          // อัตราส่วน 4:3 ตามสเปกดีไซน์ (การ์ดสินค้า) — สินค้าขายแล้วลดทอนภาพเป็นขาวดำ+จาง
+          // เพื่อสื่อว่าปิดการขายแล้วโดยไม่ต้องพึ่งสีอย่างเดียว (มีป้าย "ขายแล้ว" กำกับซ้ำอยู่แล้ว)
+          <div className="relative aspect-[4/3] w-full">
+            <Image
+              src={cover}
+              alt={product.title}
+              fill
+              sizes="(min-width: 1024px) 25vw, 50vw"
+              className={["product-photo object-cover", isSold ? "grayscale opacity-55" : ""].join(" ")}
+            />
           </div>
         ) : (
-          <div className="flex h-36 items-center justify-center bg-neutral-100 text-xs text-neutral-400">
+          <div className="flex aspect-[4/3] w-full items-center justify-center bg-neutral-100 text-xs text-neutral-400">
             ไม่มีรูปภาพ
           </div>
         )}
@@ -52,8 +61,10 @@ export function ProductCard({
         )}
       </div>
       <div className="flex flex-col gap-1 p-3">
-        <p className="line-clamp-2 text-sm font-medium text-neutral-900">{product.title}</p>
-        <p className="font-[var(--font-display)] text-base font-medium text-primary-600">
+        <p className={["line-clamp-2 text-sm font-medium", isSold ? "text-neutral-400" : "text-neutral-900"].join(" ")}>
+          {product.title}
+        </p>
+        <p className={["text-base font-bold tracking-[-0.01em]", isSold ? "text-sold" : "text-price"].join(" ")}>
           ฿{product.price.toLocaleString("th-TH")}
         </p>
         <div className="flex items-center justify-between text-xs text-neutral-500">

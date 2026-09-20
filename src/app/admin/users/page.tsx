@@ -108,7 +108,7 @@ export default async function AdminUsersPage({
                     <td className="whitespace-nowrap px-4 py-2.5 align-top">
                       <div className="flex flex-wrap gap-1.5">
                         {u.role === "admin" && <Badge status="info">แอดมิน</Badge>}
-                        {u.isVerified && <Badge status="success">ยืนยันตัวตนแล้ว</Badge>}
+                        {u.isVerified && <Badge status="verified">ยืนยันตัวตนแล้ว</Badge>}
                         {u.isSuspended && <Badge status="error">ถูกระงับ</Badge>}
                       </div>
                     </td>

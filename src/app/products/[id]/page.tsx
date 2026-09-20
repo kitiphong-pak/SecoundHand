@@ -68,7 +68,7 @@ export default async function ProductDetailPage({
             )}
           </div>
 
-          <p className="font-[var(--font-display)] text-2xl font-semibold text-primary-600">
+          <p className="text-2xl font-bold tracking-[-0.01em] text-price">
             ฿{product.price.toLocaleString("th-TH")}
           </p>
 
@@ -98,7 +98,7 @@ export default async function ProductDetailPage({
                 </p>
                 <p className="mt-1.5">
                   {seller.is_verified ? (
-                    <Badge status="success">ยืนยันตัวตนแล้ว ✅</Badge>
+                    <Badge status="verified">ยืนยันตัวตนแล้ว</Badge>
                   ) : (
                     <Badge status="neutral">ยังไม่ยืนยันตัวตน</Badge>
                   )}

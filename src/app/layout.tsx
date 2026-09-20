@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Prompt, Noto_Sans_Thai } from "next/font/google";
+import { Noto_Sans_Thai } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 
@@ -15,16 +15,12 @@ const THEME_INIT_SCRIPT = `
   } catch (e) {}
 `;
 
-const prompt = Prompt({
-  variable: "--font-prompt",
-  subsets: ["thai", "latin"],
-  weight: ["500", "600"],
-});
-
+// ฟอนต์เดียวทั้งระบบตามสเปกดีไซน์ (ไม่ใช้ฟอนต์ที่สองสำหรับหัวเรื่อง) — สร้างลำดับชั้นด้วย
+// น้ำหนัก 400/500/600/700 แทน
 const notoSansThai = Noto_Sans_Thai({
   variable: "--font-noto-sans-thai",
   subsets: ["thai", "latin"],
-  weight: ["400", "500"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -36,7 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="th"
-      className={`${prompt.variable} ${notoSansThai.variable} h-full antialiased`}
+      className={`${notoSansThai.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

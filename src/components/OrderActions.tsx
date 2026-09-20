@@ -182,10 +182,12 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
       {/* รอผู้ขายกรอก OTP */}
       {order.status === "awaiting_otp_entry" && order.otpExpiresAt && (
         <>
+          {/* รหัส OTP คือกลไกความปลอดภัย ไม่ใช่แบรนด์/ราคา จึงใช้โทนเขียวน้ำทะเล (--trust)
+              ตามกฎข้อ 5 ของสเปกดีไซน์ (ทุกอย่างที่สื่อความปลอดภัยใช้สีเขียวน้ำทะเล) */}
           {role === "buyer" && (
-            <div className="rounded-[var(--radius-md)] bg-primary-50 p-4 text-center">
+            <div className="rounded-[var(--radius-md)] bg-trust-surface p-4 text-center">
               <p className="text-xs text-neutral-500">แจ้งรหัสนี้ให้ผู้ขายเพื่อปิดการขาย</p>
-              <p className="mt-1 font-[var(--font-display)] text-3xl font-semibold tracking-widest text-primary-600">
+              <p className="mt-1 text-3xl font-bold tracking-widest text-trust">
                 {order.otpCode}
               </p>
               <p className="mt-1 text-xs text-neutral-400">

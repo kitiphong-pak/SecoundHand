@@ -1,10 +1,19 @@
-// ใช้ SVG ของตัวเองแทน emoji 📍 เพราะ emoji เรนเดอร์ไม่เหมือนกันในแต่ละแพลตฟอร์ม/ฟอนต์
-// (บางเครื่องออกมาเป็นเข็มหมุดปักกระดาน ไม่ใช่หมุดปักแผนที่ทรงหยดน้ำแบบที่ต้องการ) ใช้
-// currentColor เพื่อให้สีตามข้อความรอบข้างเสมอ ไม่ต้องกำหนดสีแยก
+// ไอคอนเส้นโปร่งตามสเปกดีไซน์ (stroke 1.75px หัว/ข้อต่อมน ห้ามปนไอคอนแบบถมทึบ) แทนของเดิมที่
+// เป็น emoji/filled path — ใช้ currentColor เพื่อให้สีตามข้อความรอบข้างเสมอ ไม่ต้องกำหนดสีแยก
 export function LocationPinIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M12 21s7-7.25 7-12a7 7 0 10-14 0c0 4.75 7 12 7 12z" />
+      <circle cx="12" cy="9" r="2.5" />
     </svg>
   );
 }

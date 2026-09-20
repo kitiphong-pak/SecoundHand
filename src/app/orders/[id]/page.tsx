@@ -74,7 +74,7 @@ export default async function OrderDetailPage({
 
           <div className="mt-3 flex items-center justify-between text-sm">
             <span className="text-neutral-500">ยอดชำระ</span>
-            <span className="font-[var(--font-display)] font-medium text-primary-600">
+            <span className="font-bold tracking-[-0.01em] text-price">
               ฿{order.amount.toLocaleString("th-TH")}
             </span>
           </div>

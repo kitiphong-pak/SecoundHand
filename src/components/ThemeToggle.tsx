@@ -38,18 +38,20 @@ function subscribe(callback: () => void) {
   };
 }
 
+// เส้นโปร่ง stroke 1.75px ตามสเปกดีไซน์ (ห้ามปนไอคอนแบบถมทึบในชุดเดียวกัน)
 function SunIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3" aria-hidden="true">
-      <path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v1.5a1 1 0 11-2 0V3a1 1 0 011-1zm0 17a1 1 0 011 1v1.5a1 1 0 11-2 0V20a1 1 0 011-1zM2 12a1 1 0 011-1h1.5a1 1 0 110 2H3a1 1 0 01-1-1zm17.5-1H21a1 1 0 110 2h-1.5a1 1 0 110-2zM4.9 4.9a1 1 0 011.4 0l1.1 1.1a1 1 0 11-1.4 1.4L4.9 6.3a1 1 0 010-1.4zm11.7 11.7a1 1 0 011.4 0l1.1 1.1a1 1 0 01-1.4 1.4l-1.1-1.1a1 1 0 010-1.4zm2.5-11.7a1 1 0 010 1.4l-1.1 1.1a1 1 0 11-1.4-1.4l1.1-1.1a1 1 0 011.4 0zM7.4 16.6a1 1 0 010 1.4l-1.1 1.1a1 1 0 01-1.4-1.4l1.1-1.1a1 1 0 011.4 0z" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
+      <circle cx="12" cy="12" r="4.5" />
+      <path d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
     </svg>
   );
 }
 
 function MoonIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="h-3 w-3" aria-hidden="true">
-      <path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3" aria-hidden="true">
+      <path d="M20 14.5A8.5 8.5 0 1110.7 3.2a6.7 6.7 0 009.3 11.3z" />
     </svg>
   );
 }

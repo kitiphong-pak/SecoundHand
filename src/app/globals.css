@@ -1,107 +1,223 @@
 @import "tailwindcss";
 
-/* โทนสีของทั้งแอปมาจากชุด token เดียวกันหมด (neutral/primary/semantic) ผ่าน utility
-   class ของ Tailwind เช่น bg-neutral-50, text-neutral-900 ฯลฯ เลยสลับเป็นโหมดมืดได้
-   แค่เปลี่ยนค่าตัวแปรตรงนี้ที่เดียว ไม่ต้องไปเติม dark: ในทุกไฟล์คอมโพเนนต์
+/* Token ทั้งชุดมาจาก prompt-design-system.md (ระบบดีไซน์ "ส่งต่ออย่างระมัดระวัง" โทนดินเผา/ครีม
+   ตามโลโก้) ยังคงสลับด้วย [data-theme] ที่ระดับ <html> เหมือนเดิม เพื่อไม่ต้องแก้ไฟล์คอมโพเนนต์
+   หลายสิบไฟล์ที่ใช้ bg-primary-500, text-primary-600, border-neutral-200 ฯลฯ อยู่แล้ว ชื่อ token เดิม
+   (primary/neutral/error/info) ถูกคงไว้เป็น "นามแฝง" ที่ชี้ไปยังค่าสีใหม่ตามสเปก ส่วน token
+   ชื่อใหม่ตามสเปกตรงๆ (action/trust/price/sold ฯลฯ) ก็ประกาศไว้ให้คอมโพเนนต์ใหม่เรียกตรงชื่อได้
    ปุ่มสลับธีมอยู่ที่ src/components/ThemeToggle.tsx, สคริปต์กันหน้าจอกะพริบตอนโหลด
    (อ่านค่าที่เคยเลือกไว้จาก localStorage มาตั้ง data-theme ก่อน hydrate) อยู่ที่ src/app/layout.tsx */
 :root {
-  --background: #f9fafb;
-  --foreground: #111827;
+  --background: #faf8f6;
+  --foreground: #2b2521;
 
+  /* พื้นผิว */
+  --surface: #faf8f6;
+  --surface-card: #ffffff;
+  --surface-sunken: #f2efeb;
+  --border: #e5e0da;
+
+  /* ตัวอักษร */
+  --text: #2b2521;
+  --text-muted: #7d7369;
+  --price: #1a1614;
+
+  /* แบรนด์ / ปุ่มหลัก */
+  --action: #bd5335;
+  --action-hover: #9a422a;
+  --action-on: #ffffff; /* สีตัวอักษรบนพื้นปุ่มหลัก */
+  --brand-text: #9a422a;
+  --brand-surface: #fae8e1;
+
+  /* ความน่าเชื่อถือ/ความปลอดภัย — ใช้เขียวน้ำทะเล ไม่ใช่สีแบรนด์ (กฎข้อ 5) */
+  --trust: #1c6c63;
+  --trust-surface: #eaf5f3;
+
+  /* สถานะ */
+  --success: #2f7d5b;
+  --success-surface: #e8f4ee;
+  --warning: #b87514;
+  --warning-surface: #fbefd8;
+  --danger: #b32418;
+  --danger-surface: #fcebe9;
+  --sold: #7d7369;
+
+  /* นามแฝงของ token เดิม เพื่อให้ class เดิมทั่วทั้งแอป (bg-primary-500, text-error-500 ฯลฯ)
+     ได้สีชุดใหม่ทันทีโดยไม่ต้องรื้อทุกไฟล์ */
   --neutral-0: #ffffff;
-  --neutral-50: #f9fafb;
-  --neutral-100: #f3f4f6;
-  --neutral-200: #e5e7eb;
-  --neutral-300: #d1d5db;
-  --neutral-400: #9ca3af;
-  --neutral-500: #6b7280;
-  --neutral-600: #4b5563;
-  --neutral-700: #374151;
-  --neutral-800: #1f2937;
-  --neutral-900: #111827;
+  --neutral-50: #faf8f6;
+  --neutral-100: #f2efeb;
+  --neutral-200: #e5e0da;
+  --neutral-300: #cfc7bd;
+  --neutral-400: #a89e92;
+  --neutral-500: #7d7369;
+  --neutral-600: #5f564c;
+  --neutral-700: #453d35;
+  --neutral-800: #332c26;
+  --neutral-900: #2b2521;
 
-  --primary-50: #eef2ff;
-  --primary-100: #e0e7ff;
-  --primary-200: #c7d2fe;
+  --primary-50: #fae8e1;
+  --primary-100: #f5d1c3;
+  --primary-200: #e9ab93;
+  --primary-700: #7a341f;
 
-  --success-50: #f0fdf4;
-  --warning-50: #fffbeb;
-  --error-50: #fef2f2;
-  --info-50: #f0f9ff;
+  --success-50: #e8f4ee;
+  --warning-50: #fbefd8;
+  --error-50: #fcebe9;
+  --info-50: #f2efeb;
+
+  --image-dim: 1;
 }
 
 /* ค่าโหมดมืดตั้งซ้ำสองที่: ตามการตั้งค่าระบบ (ยังไม่เคยกดเลือกเอง) กับตอนกดเลือก
    "มืด" ไว้ตรงๆ ผ่าน data-theme (ต้องชนะการตั้งค่าระบบเสมอไม่ว่าระบบจะเป็นโหมดไหน) */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #0d1117;
-    --foreground: #f0f6fc;
+    --background: #17120f;
+    --foreground: #f2eae4;
 
-    --neutral-0: #161b22;
-    --neutral-50: #0d1117;
-    --neutral-100: #1c2129;
-    --neutral-200: #30363d;
-    --neutral-300: #3d444d;
-    --neutral-400: #6e7681;
-    --neutral-500: #8b949e;
-    --neutral-600: #9ea7b3;
-    --neutral-700: #c9d1d9;
-    --neutral-800: #dde3ea;
-    --neutral-900: #f0f6fc;
+    --surface: #17120f;
+    --surface-card: #221c18;
+    --surface-sunken: #0f0c0a;
+    --border: #3a322c;
 
-    --primary-50: #1a1f3d;
-    --primary-100: #242b57;
-    --primary-200: #33396e;
+    --text: #f2eae4;
+    --text-muted: #b0a398;
+    --price: #f7f1ec;
 
-    --success-50: #122a1c;
-    --warning-50: #2b220c;
-    --error-50: #2d1316;
-    --info-50: #0c2433;
+    --action: #e28a6d;
+    --action-hover: #ebac96;
+    --action-on: #17120f; /* ปุ่มสีอ่อนในโหมดมืด ตัวอักษรต้องเป็นสีเข้ม ไม่ใช่ขาว */
+    --brand-text: #e28a6d;
+    --brand-surface: #3a2018;
+
+    --trust: #4fb3a4;
+    --trust-surface: #14302d;
+
+    --success: #5cb483;
+    --success-surface: #152e22;
+    --warning: #e0a33b;
+    --warning-surface: #33260e;
+    --danger: #e5776a;
+    --danger-surface: #361714;
+    --sold: #8a7f74;
+
+    --neutral-0: #221c18;
+    --neutral-50: #17120f;
+    --neutral-100: #241d19;
+    --neutral-200: #3a322c;
+    --neutral-300: #4d443c;
+    --neutral-400: #6b6055;
+    --neutral-500: #b0a398;
+    --neutral-600: #c7bcb0;
+    --neutral-700: #ded4c9;
+    --neutral-800: #ede4dc;
+    --neutral-900: #f2eae4;
+
+    --primary-50: #3a2018;
+    --primary-100: #4d2a1e;
+    --primary-200: #7a4531;
+    --primary-700: #f2c4b1;
+
+    --success-50: #152e22;
+    --warning-50: #33260e;
+    --error-50: #361714;
+    --info-50: #241d19;
+
+    --image-dim: 0.92;
   }
 }
 
 :root[data-theme="dark"] {
-  --background: #0d1117;
-  --foreground: #f0f6fc;
+  --background: #17120f;
+  --foreground: #f2eae4;
 
-  --neutral-0: #161b22;
-  --neutral-50: #0d1117;
-  --neutral-100: #1c2129;
-  --neutral-200: #30363d;
-  --neutral-300: #3d444d;
-  --neutral-400: #6e7681;
-  --neutral-500: #8b949e;
-  --neutral-600: #9ea7b3;
-  --neutral-700: #c9d1d9;
-  --neutral-800: #dde3ea;
-  --neutral-900: #f0f6fc;
+  --surface: #17120f;
+  --surface-card: #221c18;
+  --surface-sunken: #0f0c0a;
+  --border: #3a322c;
 
-  --primary-50: #1a1f3d;
-  --primary-100: #242b57;
-  --primary-200: #33396e;
+  --text: #f2eae4;
+  --text-muted: #b0a398;
+  --price: #f7f1ec;
 
-  --success-50: #122a1c;
-  --warning-50: #2b220c;
-  --error-50: #2d1316;
-  --info-50: #0c2433;
+  --action: #e28a6d;
+  --action-hover: #ebac96;
+  --action-on: #17120f;
+  --brand-text: #e28a6d;
+  --brand-surface: #3a2018;
+
+  --trust: #4fb3a4;
+  --trust-surface: #14302d;
+
+  --success: #5cb483;
+  --success-surface: #152e22;
+  --warning: #e0a33b;
+  --warning-surface: #33260e;
+  --danger: #e5776a;
+  --danger-surface: #361714;
+  --sold: #8a7f74;
+
+  --neutral-0: #221c18;
+  --neutral-50: #17120f;
+  --neutral-100: #241d19;
+  --neutral-200: #3a322c;
+  --neutral-300: #4d443c;
+  --neutral-400: #6b6055;
+  --neutral-500: #b0a398;
+  --neutral-600: #c7bcb0;
+  --neutral-700: #ded4c9;
+  --neutral-800: #ede4dc;
+  --neutral-900: #f2eae4;
+
+  --primary-50: #3a2018;
+  --primary-100: #4d2a1e;
+  --primary-200: #7a4531;
+  --primary-700: #f2c4b1;
+
+  --success-50: #152e22;
+  --warning-50: #33260e;
+  --error-50: #361714;
+  --info-50: #241d19;
+
+  --image-dim: 0.92;
 }
 
 @theme inline {
   --font-sans: var(--font-noto-sans-thai);
-  --font-display: var(--font-prompt);
+  /* ไม่ใช้ฟอนต์ที่สองสำหรับหัวเรื่องตามสเปก — ให้ font-display ชี้ไปที่ฟอนต์เดียวกับ body
+     เพื่อคง class เดิม (font-[var(--font-display)]) ที่ใช้อยู่ ~30 จุดไว้ได้โดยไม่ต้องแก้ทุกไฟล์ */
+  --font-display: var(--font-noto-sans-thai);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
-  /* primary — same indigo scale used in the Figma design system (ค่าเข้ม 500-700 คงที่
-     ทั้งสองธีมเพราะสีสด อ่านง่ายอยู่แล้วทั้งบนพื้นสว่าง/มืด มีแค่โทนอ่อน 50-200 ที่ต้องสลับ) */
+  /* พื้นผิว/ตัวอักษร/เส้นขอบ ชื่อใหม่ตามสเปก */
+  --color-surface: var(--surface);
+  --color-surface-card: var(--surface-card);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-price: var(--price);
+
+  --color-action: var(--action);
+  --color-action-hover: var(--action-hover);
+  --color-action-on: var(--action-on);
+  --color-brand-text: var(--brand-text);
+  --color-brand-surface: var(--brand-surface);
+
+  --color-trust: var(--trust);
+  --color-trust-surface: var(--trust-surface);
+  --color-sold: var(--sold);
+
+  /* primary — นามแฝงของ --action เพื่อให้ class เดิมทั่วแอป (bg-primary-500 ฯลฯ) ได้สีแบรนด์ใหม่ */
   --color-primary-50: var(--primary-50);
   --color-primary-100: var(--primary-100);
   --color-primary-200: var(--primary-200);
-  --color-primary-500: #4f46e5;
-  --color-primary-600: #4338ca;
-  --color-primary-700: #3730a3;
+  --color-primary-500: var(--action);
+  --color-primary-600: var(--action-hover);
+  --color-primary-700: var(--primary-700);
 
   /* neutral */
   --color-neutral-0: var(--neutral-0);
@@ -116,16 +232,16 @@
   --color-neutral-800: var(--neutral-800);
   --color-neutral-900: var(--neutral-900);
 
-  /* semantic (ค่าสด 500 คงที่ทั้งสองธีมเหมือน primary มีแค่โทนอ่อน 50 ที่ใช้เป็นพื้นหลัง
-     ป้าย/กล่องแจ้งเตือนที่ต้องสลับเป็นโทนเข้มแบบมีสีในโหมดมืด) */
+  /* semantic — error เดิมชี้ไป --danger, info เดิมชี้ไปโทนกลาง (ไม่ใช้ --trust เพราะ trust
+     สงวนไว้เฉพาะความหมาย "ปลอดภัย/ยืนยันตัวตนแล้ว" ตามกฎข้อ 5 ของสเปก ไม่ใช่ "ข้อมูลทั่วไป") */
   --color-success-50: var(--success-50);
-  --color-success-500: #16a34a;
+  --color-success-500: var(--success);
   --color-warning-50: var(--warning-50);
-  --color-warning-500: #d97706;
+  --color-warning-500: var(--warning);
   --color-error-50: var(--error-50);
-  --color-error-500: #dc2626;
+  --color-error-500: var(--danger);
   --color-info-50: var(--info-50);
-  --color-info-500: #0284c7;
+  --color-info-500: var(--text-muted);
 
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -137,11 +253,25 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
+  /* ตัวอักษรไทยต้องการ line-height สูงกว่าอังกฤษ กันสระบน-ล่างชนกัน (ข้อกำหนดตัวอักษรในสเปก) */
+  line-height: 1.6;
 }
 
-/* โลโก้ navbar มีสองไฟล์ เพราะตัวอักษร "songtor" ในต้นฉบับเป็นสีน้ำเงินเขียวเข้ม ซึ่งอ่านแทบ
-   ไม่ออกบนแถบสีเข้มของโหมดมืด (--neutral-0 = #161b22) ไฟล์ logo-dark จึงเปลี่ยนเฉพาะสี
-   ตัวอักษรเป็นโทนสว่าง ส่วนไอคอนมือสีส้มใช้ร่วมกันทั้งสองธีม
+/* focus ring ที่มองเห็นชัดทั้งสองโหมด ใช้สีแบรนด์เดียวกับปุ่มหลักเพื่อไม่ต้องเพิ่ม token สีใหม่ */
+:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+/* รูปสินค้า (ProductCard/ProductGallery) หรี่ความสว่างลง ~8% ในโหมดมืดกันภาพขาวจ้าแยงตา —
+   ตั้งใจไม่ใช้ selector กว้างแบบ `img` เพราะจะกระทบโลโก้/ไอคอน/กราฟไปด้วย */
+.product-photo {
+  filter: brightness(var(--image-dim));
+}
+
+/* โลโก้ navbar มีสองไฟล์ เพราะตัวอักษร "songtor" ในต้นฉบับเป็นสีเขียวน้ำทะเลเข้ม (ตรงกับ --trust)
+   ซึ่งอ่านแทบไม่ออกบนแถบสีเข้มของโหมดมืด ไฟล์ logo-dark จึงเปลี่ยนเฉพาะสีตัวอักษรเป็นโทนสว่าง
+   ส่วนไอคอนมือสีดินเผาใช้ร่วมกันทั้งสองธีม
    กติกาการสลับเรียงลำดับเหมือนตัวแปรสีด้านบนเป๊ะ — media query มาก่อน แล้ว data-theme ปิดท้าย
    เพื่อให้การกดเลือกธีมเองชนะการตั้งค่าของระบบเสมอ (specificity เท่ากัน ลำดับในไฟล์เป็นตัวตัดสิน) */
 .logo-theme-dark {
