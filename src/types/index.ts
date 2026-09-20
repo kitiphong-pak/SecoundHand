@@ -72,6 +72,23 @@ export interface ChatMessage {
   text: string;
   createdAt: string;
   read: boolean;
+  offerId?: string; // ถ้าข้อความนี้คือการเสนอราคา ผูกกับแถวใน Offer — ดูสถานะล่าสุดจาก offers ไม่ใช่จากข้อความ
+}
+
+// ข้อเสนอราคาต่อรองในแชท — เก็บแยกจากเนื้อข้อความเพราะมีสถานะเปลี่ยนได้หลังส่งไปแล้ว (ผู้รับ
+// กดยอมรับ/ปฏิเสธทีหลัง) การ "ยอมรับ" ไม่ได้สร้างออเดอร์ทันที แค่ปลดล็อกให้ฝั่งผู้ซื้อกดซื้อใน
+// ราคานี้ได้เอง (ดู POST /api/orders ที่รับ offerId)
+export type OfferStatus = "pending" | "accepted" | "declined" | "cancelled";
+
+export interface Offer {
+  id: string;
+  productId: string;
+  fromUserId: string;
+  toUserId: string;
+  amount: number;
+  status: OfferStatus;
+  createdAt: string;
+  respondedAt?: string;
 }
 
 // ข้อความติดต่อระหว่างผู้ใช้กับทีมผู้ดูแล — ห้องสนทนาระบุด้วย userId เดียว (คนละเรื่องกับ

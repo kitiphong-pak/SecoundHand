@@ -20,7 +20,7 @@ export default async function ChatPage({
 
   const { data: product } = await supabase
     .from("products")
-    .select("id, title, seller_id")
+    .select("id, title, seller_id, price, status")
     .eq("id", productId)
     .maybeSingle();
   if (!product) notFound();
@@ -71,7 +71,14 @@ export default async function ChatPage({
           <p className="text-xs text-neutral-400">แชทเกี่ยวกับ</p>
           <p className="text-sm font-medium text-neutral-900">{product.title}</p>
         </div>
-        <ChatThread productId={productId} currentUserId={user.id} otherUser={otherUser} />
+        <ChatThread
+          productId={productId}
+          currentUserId={user.id}
+          otherUser={otherUser}
+          productPrice={Number(product.price)}
+          isSeller={product.seller_id === user.id}
+          canNegotiate={product.status === "listed"}
+        />
       </main>
     </div>
   );

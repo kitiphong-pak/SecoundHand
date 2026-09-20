@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { mapMessage, UUID_RE } from "@/lib/mappers";
+import { mapMessage, mapOffer, UUID_RE } from "@/lib/mappers";
 
 export async function GET(
   req: Request,
@@ -40,7 +40,19 @@ export async function GET(
     for (const m of messages) if (m.toUserId === user.id) m.read = true;
   }
 
-  return NextResponse.json({ messages });
+  // ข้อเสนอราคาของคู่สนทนานี้ในสินค้านี้ — ดึงมาคู่กับข้อความเพราะ ChatThread ต้องโชว์สถานะ
+  // ล่าสุด (pending/accepted/...) ของแต่ละข้อเสนอ ซึ่งเปลี่ยนได้หลังข้อความถูกส่งไปแล้ว
+  const { data: offerRows } = await supabase
+    .from("offers")
+    .select("*")
+    .eq("product_id", productId)
+    .or(
+      `and(from_user_id.eq.${user.id},to_user_id.eq.${withUserId}),and(from_user_id.eq.${withUserId},to_user_id.eq.${user.id})`
+    )
+    .order("created_at", { ascending: true });
+  const offers = (offerRows ?? []).map(mapOffer);
+
+  return NextResponse.json({ messages, offers });
 }
 
 export async function POST(

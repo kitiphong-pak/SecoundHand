@@ -50,6 +50,17 @@ const orderRow = {
   created_at: "2026-01-01T00:00:00Z",
 };
 
+const acceptedOfferRow = {
+  id: "offer-1",
+  product_id: "product-1",
+  from_user_id: BUYER.id,
+  to_user_id: SELLER,
+  amount: 3000,
+  status: "accepted",
+  created_at: "2026-01-01T00:00:00Z",
+  responded_at: "2026-01-01T00:05:00Z",
+};
+
 function request(body: unknown) {
   return new Request("http://localhost/api/orders", {
     method: "POST",
@@ -133,6 +144,55 @@ describe("POST /api/orders — สิทธิ์การเข้าถึง"
   it("สินค้าไม่มีอยู่จริง → 404", async () => {
     mock.current!.queueResult({ data: null, error: null });
     const res = await POST(request({ productId: "ไม่มีอยู่" }));
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /api/orders — ซื้อในราคาที่ต่อรองได้ (offerId)", () => {
+  it("ข้อเสนอที่ยอมรับแล้วของคู่นี้ → สร้างออเดอร์ในราคาที่ต่อรองได้ ไม่ใช่ราคาที่ตั้งไว้", async () => {
+    mock.current!.queueResult({ data: productRow, error: null }); // อ่านสินค้า
+    mock.current!.queueResult({ data: acceptedOfferRow, error: null }); // อ่านข้อเสนอ
+    mock.current!.queueResult({ data: { ...productRow, status: "reserved" }, error: null }); // จองสำเร็จ
+    mock.current!.queueResult({ data: { ...orderRow, amount: 3000 }, error: null }); // สร้างออเดอร์
+
+    const res = await POST(request({ productId: "product-1", offerId: "offer-1" }));
+    expect(res.status).toBe(201);
+
+    const insert = mock.current!.callsTo("orders")[0];
+    expect(hasOp(insert, "insert", { product_id: "product-1", buyer_id: BUYER.id, seller_id: SELLER, status: "pending_payment", amount: 3000 })).toBe(true);
+  });
+
+  it("ข้อเสนอยังไม่ถูกยอมรับ (ยัง pending) → 409 ไม่จองสินค้า", async () => {
+    mock.current!.queueResult({ data: productRow, error: null });
+    mock.current!.queueResult({ data: { ...acceptedOfferRow, status: "pending" }, error: null });
+
+    const res = await POST(request({ productId: "product-1", offerId: "offer-1" }));
+    expect(res.status).toBe(409);
+    expect(mock.current!.callsTo("products")).toHaveLength(1);
+  });
+
+  it("ข้อเสนอเป็นของสินค้าอื่น → 400", async () => {
+    mock.current!.queueResult({ data: productRow, error: null });
+    mock.current!.queueResult({ data: { ...acceptedOfferRow, product_id: "product-อื่น" }, error: null });
+
+    const res = await POST(request({ productId: "product-1", offerId: "offer-1" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("ผู้ใช้ไม่ได้เป็นคู่สนทนาของข้อเสนอนี้ → 403", async () => {
+    mockUser.current = { id: "victim-9", role: "user", name: "คนอื่น" };
+    mock.current!.queueResult({ data: productRow, error: null });
+    mock.current!.queueResult({ data: acceptedOfferRow, error: null });
+
+    const res = await POST(request({ productId: "product-1", offerId: "offer-1" }));
+    expect(res.status).toBe(403);
+  });
+
+  it("ไม่พบข้อเสนอนี้ → 404", async () => {
+    mock.current!.queueResult({ data: productRow, error: null });
+    mock.current!.queueResult({ data: null, error: null });
+
+    const res = await POST(request({ productId: "product-1", offerId: "offer-ไม่มีอยู่" }));
     expect(res.status).toBe(404);
   });
 });
