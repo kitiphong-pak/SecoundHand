@@ -7,7 +7,7 @@ import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
 import { OrderActions } from "@/components/OrderActions";
 import { ReviewForm } from "@/components/ReviewForm";
-import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
+import { orderStatusBadge } from "@/lib/orderStatus";
 
 export default async function OrderDetailPage({
   params,
@@ -32,7 +32,7 @@ export default async function OrderDetailPage({
     supabase.from("users").select("name").eq("id", order.sellerId).maybeSingle(),
   ]);
 
-  const badge = ORDER_STATUS_LABEL[order.status];
+  const badge = orderStatusBadge(order.status, role);
 
   // ห้ามส่งรหัส OTP จริงไปให้ฝั่งผู้ขายเด็ดขาด (ต้องรับจากผู้ซื้อเท่านั้นถึงจะกรอกได้)
   // ต่อให้ UI ไม่แสดง ถ้าไม่ตัดออกตรงนี้ค่าจะรั่วไปกับ RSC payload ที่ส่งลง client อยู่ดี

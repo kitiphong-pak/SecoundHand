@@ -6,7 +6,7 @@ import { mapProduct } from "@/lib/mappers";
 import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/Badge";
 import { RemoveListingButton } from "@/components/RemoveListingButton";
-import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
+import { orderStatusBadge } from "@/lib/orderStatus";
 import type { OrderStatus } from "@/types";
 
 const PRODUCT_STATUS_BADGE: Record<
@@ -79,7 +79,7 @@ export default async function MyListingsPage() {
             {products.map((product) => {
               const badge =
                 product.status === "reserved"
-                  ? ORDER_STATUS_LABEL[statusByProduct.get(product.id) ?? "pending_payment"]
+                  ? orderStatusBadge(statusByProduct.get(product.id) ?? "pending_payment", "seller")
                   : PRODUCT_STATUS_BADGE[product.status];
               return (
                 <div
