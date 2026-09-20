@@ -1,20 +1,101 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { ChatMessage, User } from "@/types";
+import { useRouter } from "next/navigation";
+import type { ChatMessage, Offer, User } from "@/types";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+
+const OFFER_BADGE = {
+  pending: { label: "รอตอบรับ", status: "pending" as const },
+  accepted: { label: "ตกลงราคานี้แล้ว", status: "success" as const },
+  declined: { label: "ปฏิเสธข้อเสนอนี้แล้ว", status: "error" as const },
+  cancelled: { label: "ถูกแทนที่ด้วยข้อเสนอใหม่", status: "neutral" as const },
+};
+
+function OfferBubble({
+  offer,
+  mine,
+  isSeller,
+  onRespond,
+  onBuy,
+  loading,
+}: {
+  offer: Offer;
+  mine: boolean;
+  isSeller: boolean;
+  onRespond: (accept: boolean) => void;
+  onBuy: () => void;
+  loading: boolean;
+}) {
+  const badge = OFFER_BADGE[offer.status];
+  // ฝั่งที่ถูกเสนอ (ไม่ใช่คนส่ง) เท่านั้นที่ตอบรับ/ปฏิเสธได้ — mine บอกว่าเราเป็นคนส่งข้อเสนอนี้ไหม
+  const canRespond = !mine && offer.status === "pending";
+  // ยอมรับแล้วต้องให้ "ผู้ซื้อ" เป็นคนกดซื้อเองเท่านั้น ไม่ว่าใครจะเป็นคนกดยอมรับข้อเสนอก็ตาม
+  const canBuy = offer.status === "accepted" && !isSeller;
+
+  return (
+    <div
+      className={[
+        "max-w-[80%] rounded-[var(--radius-md)] border border-border bg-surface-card px-3.5 py-3 text-sm",
+        mine ? "self-end" : "self-start",
+      ].join(" ")}
+    >
+      <p className="text-xs text-neutral-500">เสนอราคา</p>
+      <p className="mt-0.5 text-lg font-bold tracking-[-0.01em] text-price">
+        ฿{offer.amount.toLocaleString("th-TH")}
+      </p>
+      <div className="mt-2">
+        <Badge status={badge.status}>{badge.label}</Badge>
+      </div>
+      {canRespond && (
+        <div className="mt-3 flex gap-2">
+          <Button size="sm" variant="primary" disabled={loading} onClick={() => onRespond(true)}>
+            ยอมรับ
+          </Button>
+          <Button size="sm" variant="secondary" disabled={loading} onClick={() => onRespond(false)}>
+            ปฏิเสธ
+          </Button>
+        </div>
+      )}
+      {canBuy && (
+        <div className="mt-3">
+          <Button size="sm" variant="primary" disabled={loading} onClick={onBuy}>
+            ซื้อในราคานี้ ฿{offer.amount.toLocaleString("th-TH")}
+          </Button>
+        </div>
+      )}
+      {offer.status === "accepted" && isSeller && (
+        <p className="mt-2 text-xs text-neutral-500">รอผู้ซื้อกดซื้อในราคานี้</p>
+      )}
+    </div>
+  );
+}
 
 export function ChatThread({
   productId,
   currentUserId,
   otherUser,
+  productPrice,
+  isSeller,
+  canNegotiate,
 }: {
   productId: string;
   currentUserId: string;
   otherUser: Pick<User, "id" | "name">;
+  productPrice: number;
+  isSeller: boolean;
+  canNegotiate: boolean;
 }) {
+  const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [showOfferForm, setShowOfferForm] = useState(false);
+  const [offerAmount, setOfferAmount] = useState("");
+  const [offerError, setOfferError] = useState("");
+  const [busyOfferId, setBusyOfferId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -22,11 +103,12 @@ export function ChatThread({
     if (res.ok) {
       const data = await res.json();
       setMessages(data.messages);
+      setOffers(data.offers ?? []);
     }
   };
 
   useEffect(() => {
-    // ดึงข้อความทันทีตอน mount แล้ว poll ต่อเนื่อง — pattern มาตรฐานสำหรับ polling ฝั่ง client
+    // ดึงทันทีตอน mount แล้ว poll ต่อเนื่อง — pattern มาตรฐานสำหรับ polling ฝั่ง client
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     const interval = setInterval(load, 4000);
@@ -55,6 +137,73 @@ export function ChatThread({
     }
   };
 
+  const onSubmitOffer = async (e: FormEvent) => {
+    e.preventDefault();
+    const amount = Number(offerAmount);
+    setOfferError("");
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setOfferError("กรอกราคาที่ต้องการเสนอ");
+      return;
+    }
+    if (amount > productPrice) {
+      setOfferError(`ราคาที่เสนอต้องไม่เกิน ฿${productPrice.toLocaleString("th-TH")}`);
+      return;
+    }
+    setSending(true);
+    try {
+      const res = await fetch(`/api/chat/${productId}/offer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toUserId: otherUser.id, amount }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setOfferError(data.error ?? "เสนอราคาไม่สำเร็จ");
+        return;
+      }
+      setOfferAmount("");
+      setShowOfferForm(false);
+      load();
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const onRespondOffer = async (offerId: string, accept: boolean) => {
+    setBusyOfferId(offerId);
+    try {
+      await fetch(`/api/offers/${offerId}/respond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accept }),
+      });
+      load();
+    } finally {
+      setBusyOfferId(null);
+    }
+  };
+
+  const onBuyWithOffer = async (offer: Offer) => {
+    setBusyOfferId(offer.id);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId, offerId: offer.id }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        router.push(`/orders/${data.order.id}`);
+        return;
+      }
+      load();
+    } finally {
+      setBusyOfferId(null);
+    }
+  };
+
+  const offerById = new Map(offers.map((o) => [o.id, o]));
+
   return (
     <div className="flex flex-1 flex-col rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0">
       <div className="border-b border-neutral-100 px-4 py-3 text-sm font-medium text-neutral-900">
@@ -67,16 +216,28 @@ export function ChatThread({
         ) : (
           messages.map((m) => {
             const mine = m.fromUserId === currentUserId;
+            const offer = m.offerId ? offerById.get(m.offerId) : undefined;
             return (
               <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={[
-                    "max-w-[75%] rounded-[var(--radius-md)] px-3.5 py-2 text-sm",
-                    mine ? "bg-primary-500 text-white" : "bg-neutral-100 text-neutral-900",
-                  ].join(" ")}
-                >
-                  {m.text}
-                </div>
+                {offer ? (
+                  <OfferBubble
+                    offer={offer}
+                    mine={mine}
+                    isSeller={isSeller}
+                    loading={busyOfferId === offer.id}
+                    onRespond={(accept) => onRespondOffer(offer.id, accept)}
+                    onBuy={() => onBuyWithOffer(offer)}
+                  />
+                ) : (
+                  <div
+                    className={[
+                      "max-w-[75%] rounded-[var(--radius-md)] px-3.5 py-2 text-sm",
+                      mine ? "bg-primary-500 text-white" : "bg-neutral-100 text-neutral-900",
+                    ].join(" ")}
+                  >
+                    {m.text}
+                  </div>
+                )}
               </div>
             );
           })
@@ -84,7 +245,40 @@ export function ChatThread({
         <div ref={bottomRef} />
       </div>
 
+      {canNegotiate && showOfferForm && (
+        <form onSubmit={onSubmitOffer} className="flex flex-col gap-2 border-t border-neutral-100 p-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-neutral-500">฿</span>
+            <input
+              type="number"
+              min={1}
+              max={productPrice}
+              value={offerAmount}
+              onChange={(e) => setOfferAmount(e.target.value)}
+              placeholder={`สูงสุด ${productPrice.toLocaleString("th-TH")}`}
+              className="flex-1 rounded-[var(--radius-md)] border border-neutral-300 px-3.5 py-2.5 text-sm outline-none focus:border-primary-500"
+            />
+            <Button type="submit" size="sm" variant="primary" disabled={sending}>
+              ส่งข้อเสนอ
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setShowOfferForm(false)}>
+              ยกเลิก
+            </Button>
+          </div>
+          {offerError && <p className="text-xs text-error-500">{offerError}</p>}
+        </form>
+      )}
+
       <form onSubmit={onSend} className="flex items-center gap-2 border-t border-neutral-100 p-3">
+        {canNegotiate && !showOfferForm && (
+          <button
+            type="button"
+            onClick={() => setShowOfferForm(true)}
+            className="flex-none rounded-[var(--radius-md)] border border-border px-3 py-2.5 text-sm text-brand-text hover:bg-brand-surface"
+          >
+            เสนอราคา
+          </button>
+        )}
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { mapProduct, mapOrder } from "@/lib/mappers";
+import { mapProduct, mapOrder, mapOffer } from "@/lib/mappers";
 import { logAction } from "@/lib/auditLog";
 
 export async function POST(req: Request) {
@@ -13,6 +13,7 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => null);
   const productId = String(body?.productId ?? "");
+  const offerId = body?.offerId ? String(body.offerId) : null;
 
   const { data: productRow } = await supabase
     .from("products")
@@ -24,6 +25,26 @@ export async function POST(req: Request) {
   const product = mapProduct(productRow);
   if (product.sellerId === user.id) {
     return NextResponse.json({ error: "ไม่สามารถซื้อสินค้าของตัวเองได้" }, { status: 400 });
+  }
+
+  // ราคาสั่งซื้อ: ปกติใช้ราคาที่ตั้งไว้ตอนลงขาย แต่ถ้ามาจากการกดซื้อหลังต่อรองราคาสำเร็จ (มี
+  // offerId แนบมา) ต้องยืนยันว่าข้อเสนอนั้น "ยอมรับแล้วจริง" และเป็นของคู่นี้กับสินค้านี้จริง
+  // ก่อนเชื่อราคาที่ผู้ใช้ส่งมา — ไม่งั้นใครก็ส่ง offerId ของคนอื่นมาซื้อในราคาที่ไม่ได้ตกลงได้
+  let amount = product.price;
+  if (offerId) {
+    const { data: offerRow } = await supabase.from("offers").select("*").eq("id", offerId).maybeSingle();
+    if (!offerRow) return NextResponse.json({ error: "ไม่พบข้อเสนอนี้" }, { status: 404 });
+    const offer = mapOffer(offerRow);
+    if (offer.productId !== product.id) {
+      return NextResponse.json({ error: "ข้อเสนอนี้ไม่ตรงกับสินค้า" }, { status: 400 });
+    }
+    if (offer.fromUserId !== user.id && offer.toUserId !== user.id) {
+      return NextResponse.json({ error: "ไม่มีสิทธิ์ใช้ข้อเสนอนี้" }, { status: 403 });
+    }
+    if (offer.status !== "accepted") {
+      return NextResponse.json({ error: "ข้อเสนอนี้ยังไม่ได้รับการยอมรับ" }, { status: 409 });
+    }
+    amount = offer.amount;
   }
 
   // "จอง" สินค้าก่อนสร้างออเดอร์เสมอ โดยเขียนแบบมีเงื่อนไข status="listed" กำกับไว้ด้วย —
@@ -51,7 +72,7 @@ export async function POST(req: Request) {
       buyer_id: user.id,
       seller_id: product.sellerId,
       status: "pending_payment",
-      amount: product.price,
+      amount,
     })
     .select()
     .single();
