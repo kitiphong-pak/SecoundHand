@@ -11,7 +11,7 @@ import { ChatButton } from "@/components/ChatButton";
 import { ProductGallery } from "@/components/ProductGallery";
 import { LocationPinIcon } from "@/components/ui/LocationPinIcon";
 import { CONDITION_LABEL } from "@/lib/categories";
-import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
+import { orderStatusBadge } from "@/lib/orderStatus";
 import type { OrderStatus } from "@/types";
 
 export default async function ProductDetailPage({
@@ -40,14 +40,21 @@ export default async function ProductDetailPage({
   // สถานะ "reserved" อยู่ได้หลายจุดใน order flow — ต้องดูสถานะออเดอร์จริง ไม่งั้นจะค้าง
   // โชว์ "รอชำระเงิน" ทั้งที่จ่ายเงิน/ส่งของไปแล้ว (บั๊กเดียวกับที่เจอในหน้าสินค้าของฉัน)
   let activeOrderBadge = null;
+  let activeOrderHref: string | null = null;
   if (product.status === "reserved") {
     const { data: orderRow } = await supabase
       .from("orders")
-      .select("status")
+      .select("id, status, buyer_id, seller_id")
       .eq("product_id", product.id)
       .neq("status", "completed")
       .maybeSingle();
-    activeOrderBadge = ORDER_STATUS_LABEL[(orderRow?.status as OrderStatus) ?? "pending_payment"];
+
+    // หน้านี้ใครเปิดก็ได้ ไม่ใช่แค่คู่ซื้อขาย — คนนอกเห็นป้ายกลางๆ ส่วนคู่ซื้อขายเห็นป้ายที่
+    // บอกว่าตัวเองต้องทำอะไร และต้องมีทางไปหน้าออเดอร์ด้วย ไม่งั้นป้ายบอกให้ลงมือแต่กดไปไหนไม่ได้
+    const party =
+      orderRow?.buyer_id === user.id ? "buyer" : orderRow?.seller_id === user.id ? "seller" : undefined;
+    activeOrderBadge = orderStatusBadge((orderRow?.status as OrderStatus) ?? "pending_payment", party);
+    if (orderRow && party) activeOrderHref = `/orders/${orderRow.id}`;
   }
 
   return (
@@ -112,11 +119,20 @@ export default async function ProductDetailPage({
             {product.sellerId !== user.id && (
               <ChatButton productId={product.id} sellerId={product.sellerId} />
             )}
-            <BuyButton
-              productId={product.id}
-              disabled={product.status !== "listed" || product.sellerId === user.id}
-              isOwner={product.sellerId === user.id}
-            />
+            {activeOrderHref ? (
+              <Link
+                href={activeOrderHref}
+                className="flex-1 rounded-[var(--radius-md)] bg-primary-500 px-5 py-3 text-center text-base font-medium text-white transition-colors hover:bg-primary-600"
+              >
+                ไปที่หน้าออเดอร์ →
+              </Link>
+            ) : (
+              <BuyButton
+                productId={product.id}
+                disabled={product.status !== "listed" || product.sellerId === user.id}
+                isOwner={product.sellerId === user.id}
+              />
+            )}
           </div>
         </div>
       </main>
