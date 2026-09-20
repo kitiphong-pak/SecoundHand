@@ -19,6 +19,7 @@ vi.mock("@/lib/auth", () => ({ getCurrentUser: async () => mockUser.current }));
 
 const { POST: createOffer } = await import("@/app/api/chat/[productId]/offer/route");
 const { POST: respondOffer } = await import("@/app/api/offers/[id]/respond/route");
+const { POST: cancelAgreement } = await import("@/app/api/offers/[id]/cancel/route");
 
 // toUserId ต้องผ่านเช็ครูปแบบ UUID ในตัว route เอง (กันค่าที่หลุดโครงสร้าง filter DSL) — id
 // ของทั้งผู้ซื้อและผู้ขายในเทสนี้เลยต้องเป็น UUID จริง ต่างจากเทสอื่นที่ไม่ได้ผ่านเช็คนี้
@@ -152,6 +153,65 @@ describe("ตอบรับ/ปฏิเสธข้อเสนอ", () => {
   it("ไม่ได้เข้าสู่ระบบ → 401 ไม่แตะฐานข้อมูล", async () => {
     mockUser.current = null;
     const res = await respondOffer(post({ accept: true }), respondParams);
+    expect(res.status).toBe(401);
+    expect(mock.current!.rpcCalls).toHaveLength(0);
+  });
+});
+
+// บั๊กที่เคยเกิด: ตกลงราคากันแล้วยังกดเสนอราคาใหม่ได้เรื่อยๆ ทำให้มีข้อเสนอที่ "ตกลงแล้ว" ค้าง
+// พร้อมกันหลายอัน แล้วเลื่อนแชทขึ้นไปกดปุ่มซื้อของอันเก่าในราคาที่ไม่ได้ตกลงกันแล้วได้
+// migration 017 ปิดทางนี้ทั้งที่ฐานข้อมูล (unique index) และที่ฟังก์ชัน (ยิง errcode 23001 กลับมา)
+describe("ตกลงราคาแล้วล็อกไว้ ต้องยกเลิกข้อตกลงก่อนถึงจะต่อรองใหม่", () => {
+  it("เสนอราคาใหม่ทั้งที่ยังมีข้อตกลงค้างอยู่ → 409 พร้อมบอกว่าต้องยกเลิกก่อน", async () => {
+    mock.current!.queueResult({ data: productRow, error: null });
+    mock.current!.queueResult({ data: null, error: { code: "23001", message: "offer_already_accepted" } });
+
+    const res = await createOffer(post({ toUserId: SELLER.id, amount: 2500 }), offerParams);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toContain("ยกเลิกข้อตกลงเดิม");
+  });
+
+  it("error อื่นจาก RPC ยังเป็น 500 เหมือนเดิม ไม่ถูกกลืนเป็น 409", async () => {
+    mock.current!.queueResult({ data: productRow, error: null });
+    mock.current!.queueResult({ data: null, error: { code: "08006", message: "connection failure" } });
+
+    const res = await createOffer(post({ toUserId: SELLER.id, amount: 2500 }), offerParams);
+    expect(res.status).toBe(500);
+  });
+
+  it("ยกเลิกข้อตกลงได้ ผ่าน RPC cancel_offer_agreement", async () => {
+    mock.current!.queueResult({ data: [{ ...offerRow, status: "cancelled" }], error: null });
+
+    const res = await cancelAgreement(post({}), respondParams);
+    expect(res.status).toBe(200);
+
+    const rpc = mock.current!.rpcCalls.find((r) => r.fn === "cancel_offer_agreement");
+    expect(rpc).toBeDefined();
+    const args = rpc!.args as Record<string, unknown>;
+    expect(args.p_offer_id).toBe("offer-1");
+    expect(args.p_user_id).toBe(BUYER.id);
+  });
+
+  // ผู้ขายก็ยกเลิกได้ ไม่ใช่แค่ผู้ซื้อ — ยังไม่มีออเดอร์เกิดขึ้น ทั้งคู่จึงยังเปลี่ยนใจได้
+  it("ฝั่งผู้ขายก็ยกเลิกข้อตกลงได้เหมือนกัน", async () => {
+    mockUser.current = SELLER;
+    mock.current!.queueResult({ data: [{ ...offerRow, status: "cancelled" }], error: null });
+
+    const res = await cancelAgreement(post({}), respondParams);
+    expect(res.status).toBe(200);
+    const rpc = mock.current!.rpcCalls.find((r) => r.fn === "cancel_offer_agreement");
+    expect((rpc!.args as Record<string, unknown>).p_user_id).toBe(SELLER.id);
+  });
+
+  it("ยกเลิกซ้ำ/ไม่มีสิทธิ์ยกเลิก (RPC ไม่คืนแถว) → 409", async () => {
+    mock.current!.queueResult({ data: [], error: null });
+    const res = await cancelAgreement(post({}), respondParams);
+    expect(res.status).toBe(409);
+  });
+
+  it("ไม่ได้เข้าสู่ระบบ → 401 ไม่แตะฐานข้อมูล", async () => {
+    mockUser.current = null;
+    const res = await cancelAgreement(post({}), respondParams);
     expect(res.status).toBe(401);
     expect(mock.current!.rpcCalls).toHaveLength(0);
   });
