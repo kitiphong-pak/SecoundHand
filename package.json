@@ -16,7 +16,8 @@
     "migrate:prd:status": "node --env-file=.env scripts/migrate.mjs status --prd",
     "seed": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs scripts/seed.ts",
     "test:db": "vitest run --config vitest.integration.config.mts",
-    "auth:migrate-users": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs scripts/migrate-users-to-auth.ts"
+    "auth:migrate-users": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs scripts/migrate-users-to-auth.ts",
+    "auth:migrate-users:apply": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs scripts/migrate-users-to-auth.ts --apply"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

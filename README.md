@@ -78,7 +78,8 @@ npm run dev
 | `npm run migrate:status` | ดูว่าไฟล์ไหนรันแล้ว — อ่านอย่างเดียว ไม่แก้อะไร |
 | `npm run migrate:prd` | เหมือน `migrate` แต่ปลายทางคือ PRD |
 | `npm run seed` | ใส่ข้อมูลตัวอย่าง |
-| `npm run auth:migrate-users` | ย้ายผู้ใช้จากระบบ auth เดิมเข้า Supabase Auth — ดูอย่างเดียวถ้าไม่ใส่ `-- --apply` |
+| `npm run auth:migrate-users` | ดูว่าจะย้ายผู้ใช้คนไหนเข้า Supabase Auth บ้าง — อ่านอย่างเดียว |
+| `npm run auth:migrate-users:apply` | ย้ายผู้ใช้จากระบบ auth เดิมเข้า Supabase Auth จริง |
 
 ## ฐานข้อมูล
 

@@ -8,8 +8,11 @@ import { SYSTEM_USER_ID } from "../src/lib/systemUser";
 // รีวิว) ไม่ต้องแก้สักแถว
 //
 // ใช้:
-//   npm run auth:migrate-users            ← ดูอย่างเดียวว่าจะย้ายใครบ้าง ไม่แก้อะไร
-//   npm run auth:migrate-users -- --apply ← ย้ายจริง
+//   npm run auth:migrate-users        ← ดูอย่างเดียวว่าจะย้ายใครบ้าง ไม่แก้อะไร
+//   npm run auth:migrate-users:apply  ← ย้ายจริง
+//
+// แยกเป็นสอง script แทนการส่ง -- --apply ต่อท้าย เพราะ PowerShell ตัด -- ทิ้งก่อนถึง npm แล้ว
+// --apply จะกลายเป็น flag ของ npm เอง สคริปต์ไม่ได้รับ เลยรันโหมดดูอย่างเดียวเงียบๆ (เจอมาแล้วจริง)
 //
 // รันซ้ำได้ปลอดภัย: ย้ายเสร็จแล้วจะล้าง password_hash ของคนนั้นเป็น null รอบถัดไปจะข้ามไปเอง
 // ถ้าหลุดกลางทาง (สร้างใน Auth แล้วแต่ยังไม่ได้ล้าง hash) รอบถัดไปจะเจอว่ามีบัญชี id นี้อยู่แล้ว
@@ -33,7 +36,7 @@ async function main() {
   console.log(`ผู้ใช้ที่ยังไม่ได้ย้าย: ${rows.length} คน`);
   if (!apply) {
     for (const r of rows) console.log(`  - ${r.email}`);
-    console.log("\nโหมดดูอย่างเดียว ยังไม่ได้แก้อะไร — ใส่ -- --apply เพื่อย้ายจริง");
+    console.log("\nโหมดดูอย่างเดียว ยังไม่ได้แก้อะไร — รัน npm run auth:migrate-users:apply เพื่อย้ายจริง");
     return;
   }
 
