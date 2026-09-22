@@ -3,17 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-
-async function call(url: string, body: object) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "เกิดข้อผิดพลาด");
-  return data;
-}
+import { callApi, messageOf } from "@/lib/apiResponse";
 
 export function DisputeResolutionButtons({ orderId }: { orderId: string }) {
   const router = useRouter();
@@ -24,10 +14,14 @@ export function DisputeResolutionButtons({ orderId }: { orderId: string }) {
     setLoading(resolution === "favor_seller" ? "seller" : "buyer");
     setError("");
     try {
-      await call(`/api/orders/${orderId}/resolve-dispute`, { resolution });
+      await callApi(`/api/orders/${orderId}/resolve-dispute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resolution }),
+      });
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+      setError(messageOf(e));
     } finally {
       setLoading(null);
     }

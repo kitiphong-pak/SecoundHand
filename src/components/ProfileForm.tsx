@@ -7,6 +7,7 @@ import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { PROVINCES } from "@/lib/provinces";
 import { fileToCompressedDataUrl } from "@/lib/image";
+import { callApi, messageOf } from "@/lib/apiResponse";
 import type { PublicUser } from "@/lib/auth";
 
 export function ProfileForm({ user }: { user: PublicUser }) {
@@ -29,16 +30,18 @@ export function ProfileForm({ user }: { user: PublicUser }) {
     setUploadingAvatar(true);
     try {
       const compressed = await fileToCompressedDataUrl(file, 400, 0.85);
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: compressed, kind: "avatar" }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "อัปโหลดรูปไม่สำเร็จ");
+      const data = await callApi<{ url: string }>(
+        "/api/upload",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: compressed, kind: "avatar" }),
+        },
+        "อัปโหลดรูปไม่สำเร็จ"
+      );
       setAvatarUrl(data.url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "อัปโหลดรูปไม่สำเร็จ");
+      setError(messageOf(err, "อัปโหลดรูปไม่สำเร็จ"));
     } finally {
       setUploadingAvatar(false);
     }
@@ -58,20 +61,19 @@ export function ProfileForm({ user }: { user: PublicUser }) {
     };
 
     try {
-      const res = await fetch("/api/auth/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "บันทึกไม่สำเร็จ");
-        return;
-      }
+      await callApi(
+        "/api/auth/profile",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+        "บันทึกไม่สำเร็จ"
+      );
       setSuccess(true);
       router.refresh();
-    } catch {
-      setError("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ");
+    } catch (err) {
+      setError(messageOf(err, "บันทึกไม่สำเร็จ"));
     } finally {
       setSubmitting(false);
     }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
+import { callApi, messageOf } from "@/lib/apiResponse";
 
 const STARS = [1, 2, 3, 4, 5];
 
@@ -39,16 +40,14 @@ export function ReviewForm({ orderId, targetLabel }: { orderId: string; targetLa
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/orders/${orderId}/review`, {
+      await callApi(`/api/orders/${orderId}/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating, comment }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "เกิดข้อผิดพลาด");
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+      setError(messageOf(e));
     } finally {
       setLoading(false);
     }

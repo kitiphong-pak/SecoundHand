@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { callApi, messageOf } from "@/lib/apiResponse";
 
 export function UserAdminActions({
   userId,
@@ -21,16 +22,14 @@ export function UserAdminActions({
     setLoading(key);
     setError("");
     try {
-      const res = await fetch(path, {
+      await callApi(path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "เกิดข้อผิดพลาด");
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+      setError(messageOf(e));
     } finally {
       setLoading(null);
     }

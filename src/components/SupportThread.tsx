@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { SupportMessage } from "@/types";
+import { callApi, messageOf } from "@/lib/apiResponse";
 
 // ใช้ได้ทั้งฝั่งผู้ใช้ (/support) และฝั่งแอดมิน (/admin/messages) — ต่างกันแค่ endpoint กับ
 // ว่าฝั่งไหนคือ "ข้อความของเรา" สำหรับจัดตำแหน่งฟองข้อความซ้าย/ขวา
@@ -46,17 +47,19 @@ export function SupportThread({
     setSending(true);
     setError("");
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "ส่งข้อความไม่สำเร็จ");
+      const data = await callApi<{ message: SupportMessage }>(
+        endpoint,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        },
+        "ส่งข้อความไม่สำเร็จ"
+      );
       setText("");
       setMessages((prev) => [...prev, data.message]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "ส่งข้อความไม่สำเร็จ");
+      setError(messageOf(err, "ส่งข้อความไม่สำเร็จ"));
     } finally {
       setSending(false);
     }
