@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser, toPublicUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapUser } from "@/lib/mappers";
 import { isOwnedImageUrl } from "@/lib/storage";
@@ -44,5 +44,5 @@ export async function PATCH(req: Request) {
     targetId: user.id,
   });
 
-  return NextResponse.json({ user: toPublicUser(mapUser(updated)) });
+  return NextResponse.json({ user: mapUser(updated) });
 }

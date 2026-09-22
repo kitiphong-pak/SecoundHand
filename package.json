@@ -15,11 +15,12 @@
     "migrate:prd": "node --env-file=.env scripts/migrate.mjs up --prd",
     "migrate:prd:status": "node --env-file=.env scripts/migrate.mjs status --prd",
     "seed": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs scripts/seed.ts",
-    "test:db": "vitest run --config vitest.integration.config.mts"
+    "test:db": "vitest run --config vitest.integration.config.mts",
+    "auth:migrate-users": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs scripts/migrate-users-to-auth.ts"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.112.4",
-    "bcryptjs": "^3.0.3",
     "next": "16.3.3",
     "react": "19.2.8",
     "react-dom": "19.2.8"
@@ -27,7 +28,6 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@testcontainers/postgresql": "^12.1.0",
-    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/pg": "^8.23.1",
     "@types/react": "^19",

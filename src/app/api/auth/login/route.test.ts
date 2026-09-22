@@ -2,15 +2,17 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createSupabaseMock } from "@/test/supabaseMock";
 import { SYSTEM_USER_ID } from "@/lib/systemUser";
 
-// บัญชี "ระบบอัตโนมัติ" มี role = admin และมีตัวตนจริงในตาราง users (จำเป็นเพราะ audit_logs
-// ต้องมี actor เสมอ) การกันไม่ให้ใครล็อกอินเข้าไปจึงห้ามพึ่งแค่ว่า "ไม่มีใครรู้รหัสผ่าน" —
-// password_hash ของบัญชีนี้อยู่ใน migration 007 ที่เปิดเผยบน GitHub สาธารณะ
-//
-// เทสสำคัญที่สุดในไฟล์นี้จึงบังคับให้ bcrypt ตอบว่า "รหัสผ่านถูกต้อง" แล้วยืนยันว่ายังล็อกอิน
-// ไม่ได้อยู่ดี = จำลองสถานการณ์ที่มีคนแครก hash สำเร็จแล้ว
-const { mock, bcryptResult } = vi.hoisted(() => ({
+// การตรวจรหัสผ่านย้ายไปอยู่ที่ Supabase Auth แล้ว — เทสนี้ mock ชั้น supabaseAuth ทั้งชั้น แล้วเทส
+// สิ่งที่ route ยังตัดสินใจเองอยู่: ใครที่ Supabase ยอมให้ผ่านแล้ว แต่แอปเราต้องปฏิเสธต่อ
+// (บัญชีระบบ, บัญชีถูกระงับ, บัญชีที่ไม่มีโปรไฟล์) และทุกกรณีที่ปฏิเสธต้องล็อกเอาต์ทิ้งด้วย
+// ไม่งั้น cookie ของ session ที่เพิ่งได้มาจาก Supabase จะค้างอยู่ในเบราว์เซอร์
+const { mock, auth } = vi.hoisted(() => ({
   mock: { current: null as ReturnType<typeof import("@/test/supabaseMock").createSupabaseMock> | null },
-  bcryptResult: { current: true },
+  auth: {
+    signInResult: { userId: "user-1" } as { userId: string } | { error: "invalid" | "rate_limited" },
+    signInCalls: 0,
+    signOutCalls: 0,
+  },
 }));
 
 vi.mock("@/lib/supabase", () => ({
@@ -18,13 +20,15 @@ vi.mock("@/lib/supabase", () => ({
     return mock.current!.supabase;
   },
 }));
-vi.mock("bcryptjs", () => ({
-  default: { compareSync: () => bcryptResult.current },
+vi.mock("@/lib/supabaseAuth", () => ({
+  signIn: async () => {
+    auth.signInCalls++;
+    return auth.signInResult;
+  },
+  signOut: async () => {
+    auth.signOutCalls++;
+  },
 }));
-vi.mock("@/lib/auth", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/auth")>("@/lib/auth");
-  return { toPublicUser: actual.toPublicUser, createSession: async () => {} };
-});
 
 const { POST } = await import("./route");
 
@@ -32,7 +36,7 @@ const userRow = (over: Record<string, unknown> = {}) => ({
   id: "user-1",
   name: "ผู้ใช้ทั่วไป",
   email: "user@example.com",
-  password_hash: "$2b$10$hash",
+  password_hash: null,
   province: "เชียงใหม่",
   role: "user",
   avatar_url: null,
@@ -53,29 +57,28 @@ const login = (email: string, password = "password123") =>
 
 beforeEach(() => {
   mock.current = createSupabaseMock();
-  bcryptResult.current = true;
+  auth.signInResult = { userId: "user-1" };
+  auth.signInCalls = 0;
+  auth.signOutCalls = 0;
 });
 
 describe("บัญชีระบบต้องล็อกอินไม่ได้", () => {
-  it("ปฏิเสธแม้ bcrypt จะบอกว่ารหัสผ่านถูกต้อง (จำลองว่ามีคนแครก hash ได้แล้ว)", async () => {
-    mock.current!.queueResult({
-      data: userRow({ id: SYSTEM_USER_ID, email: "system@secoundhand.internal", role: "admin", is_verified: true }),
-      error: null,
-    });
+  // ทางปกติบัญชีระบบไม่มีตัวตนใน Supabase Auth จึงล็อกอินไม่ได้ตั้งแต่ต้น เทสนี้จำลองกรณีที่
+  // Supabase ดันยอมให้ผ่านมา (เช่นมีคนสร้างบัญชีใน Auth ด้วย id นี้ผิดพลาด) แล้วยืนยันว่า route
+  // ยังปฏิเสธอยู่ดี — บัญชีนี้มี role เป็น admin หลุดเข้าไปได้เท่ากับได้สิทธิ์ทั้งระบบ
+  it("ปฏิเสธแม้ Supabase จะยอมให้ผ่าน และล็อกเอาต์ session ที่เพิ่งได้มาทิ้ง", async () => {
+    auth.signInResult = { userId: SYSTEM_USER_ID };
 
     const res = await login("system@secoundhand.internal");
     expect(res.status).toBe(401);
-    // ต้องไม่มี session ถูกสร้าง = ไม่มี cookie ล็อกอินหลุดออกไป
-    expect(res.headers.get("set-cookie")).toBeNull();
+    expect(auth.signOutCalls).toBe(1);
   });
 
   it("ตอบข้อความเดียวกับรหัสผ่านผิด ไม่บอกใบ้ว่าอีเมลนี้พิเศษ", async () => {
-    mock.current!.queueResult({ data: userRow({ id: SYSTEM_USER_ID }), error: null });
+    auth.signInResult = { userId: SYSTEM_USER_ID };
     const systemMsg = (await (await login("system@secoundhand.internal")).json()).error;
 
-    mock.current = createSupabaseMock();
-    bcryptResult.current = false;
-    mock.current.queueResult({ data: userRow(), error: null });
+    auth.signInResult = { error: "invalid" };
     const wrongPwMsg = (await (await login("user@example.com")).json()).error;
 
     expect(systemMsg).toBe(wrongPwMsg);
@@ -83,38 +86,49 @@ describe("บัญชีระบบต้องล็อกอินไม่�
 });
 
 describe("ผู้ใช้ทั่วไปยังล็อกอินได้ตามปกติ", () => {
-  it("รหัสผ่านถูกต้อง → 200", async () => {
+  it("รหัสผ่านถูกต้อง → 200 และไม่ล็อกเอาต์", async () => {
     mock.current!.queueResult({ data: userRow(), error: null });
     const res = await login("user@example.com");
     expect(res.status).toBe(200);
     expect((await res.json()).user.email).toBe("user@example.com");
+    expect(auth.signOutCalls).toBe(0);
   });
 
-  it("ไม่คืน passwordHash กลับไปกับ response", async () => {
-    mock.current!.queueResult({ data: userRow(), error: null });
+  // ผู้ใช้ที่ย้ายมาจากระบบเดิมยังมี hash ค้างในตารางจนกว่าสคริปต์ย้ายจะล้างให้
+  it("ไม่คืน password hash กลับไปกับ response แม้ในตารางจะยังมีค้างอยู่", async () => {
+    mock.current!.queueResult({ data: userRow({ password_hash: "$2b$10$leftover" }), error: null });
     const body = await (await login("user@example.com")).json();
     expect(JSON.stringify(body)).not.toContain("$2b$10$");
-    expect(body.user.passwordHash).toBeUndefined();
   });
 
-  it("รหัสผ่านผิด → 401", async () => {
-    bcryptResult.current = false;
-    mock.current!.queueResult({ data: userRow(), error: null });
+  it("รหัสผ่านผิด → 401 และไม่ไปอ่านโปรไฟล์ต่อ", async () => {
+    auth.signInResult = { error: "invalid" };
     expect((await login("user@example.com")).status).toBe(401);
+    expect(mock.current!.calls).toHaveLength(0);
   });
 
-  it("ไม่มีอีเมลนี้ในระบบ → 401", async () => {
+  it("ลองผิดบ่อยจน Supabase จำกัดไว้ → 429 พร้อมบอกให้รอ", async () => {
+    auth.signInResult = { error: "rate_limited" };
+    const res = await login("user@example.com");
+    expect(res.status).toBe(429);
+    expect((await res.json()).error).toContain("รอ");
+  });
+
+  it("มีบัญชีใน Auth แต่ไม่มีโปรไฟล์ในแอป → 401 และล็อกเอาต์ทิ้ง", async () => {
     mock.current!.queueResult({ data: null, error: null });
-    expect((await login("ไม่มีจริง@example.com")).status).toBe(401);
+    expect((await login("user@example.com")).status).toBe(401);
+    expect(auth.signOutCalls).toBe(1);
   });
 
-  it("บัญชีถูกระงับ → 403", async () => {
+  it("บัญชีถูกระงับ → 403 และล็อกเอาต์ทิ้ง ไม่ปล่อย session ค้าง", async () => {
     mock.current!.queueResult({ data: userRow({ is_suspended: true }), error: null });
     expect((await login("user@example.com")).status).toBe(403);
+    expect(auth.signOutCalls).toBe(1);
   });
 
-  it("ไม่กรอกอีเมลหรือรหัสผ่าน → 400 และไม่แตะฐานข้อมูล", async () => {
+  it("ไม่กรอกอีเมลหรือรหัสผ่าน → 400 และไม่ส่งไป Supabase เลย", async () => {
     expect((await login("", "")).status).toBe(400);
+    expect(auth.signInCalls).toBe(0);
     expect(mock.current!.calls).toHaveLength(0);
   });
 });

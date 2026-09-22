@@ -8,12 +8,11 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  passwordHash: string;
   province: Province;
   role: Role;
   avatarUrl?: string;
   isVerified: boolean; // ผ่านการยืนยันตัวตน (KYC demo) แล้วหรือยัง — แอดมินกดยืนยันให้จาก /admin/users
-  isSuspended: boolean; // ถูกแอดมินระงับบัญชี — ระงับแล้วล็อกอินไม่ได้และ session เดิมถูกเลิกทันที
+  isSuspended: boolean; // ถูกแอดมินระงับบัญชี — ระงับแล้วล็อกอินไม่ได้ และ getCurrentUser() ตอบ null ทันทีแม้ session ยังไม่หมดอายุ
   createdAt: string;
 }
 

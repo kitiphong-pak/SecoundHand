@@ -33,7 +33,7 @@ pending_payment ──▶ paid ──▶ awaiting_buyer_confirmation ──▶ a
 | เฟรมเวิร์ก | Next.js 16 (App Router), React 19, TypeScript |
 | ฐานข้อมูล | Supabase (Postgres) ผ่าน `@supabase/supabase-js` ฝั่งเซิร์ฟเวอร์เท่านั้น |
 | หน้าตา | Tailwind CSS 4 + CSS custom properties (รองรับโหมดสว่าง/มืด) |
-| ล็อกอิน | cookie session ของตัวเอง + bcrypt (ไม่ได้ใช้ Supabase Auth) |
+| ล็อกอิน | Supabase Auth ผ่าน `@supabase/ssr` (session อยู่ใน cookie, รีเฟรชใน `src/proxy.ts`) |
 | เก็บรูป | Supabase Storage |
 | เทส | Vitest |
 
@@ -56,12 +56,13 @@ npm run dev
 | ตัวแปร | ใช้ทำอะไร |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | URL ของ Supabase project |
-| `SUPABASE_SECRET_KEY` | service_role key — เซิร์ฟเวอร์ใช้คุยกับฐานข้อมูล |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | publishable key — ใช้ล็อกอิน/อ่าน session ของผู้ใช้ผ่าน Supabase Auth |
+| `SUPABASE_SECRET_KEY` | service_role key — เซิร์ฟเวอร์ใช้คุยกับฐานข้อมูล และสร้าง/ลบบัญชีผ่าน admin API |
 | `CRON_SECRET` | กันคนอื่นยิง `/api/cron/order-timeouts` |
 | `DATABASE_URL` | ต่อ Postgres ตรงๆ ใช้เฉพาะคำสั่ง `migrate` |
 | `PRD_DATABASE_URL` | เหมือนข้างบนแต่ของ PRD ใช้กับ `migrate:prd` |
 
-ตัวแอปใช้แค่ 3 ตัวแรก สองตัวล่างเป็นของเครื่องมือ migration ไม่ต้องตั้งบน Vercel
+ตัวแอปใช้แค่ 4 ตัวแรก สองตัวล่างเป็นของเครื่องมือ migration ไม่ต้องตั้งบน Vercel
 
 ## คำสั่ง
 
@@ -77,6 +78,7 @@ npm run dev
 | `npm run migrate:status` | ดูว่าไฟล์ไหนรันแล้ว — อ่านอย่างเดียว ไม่แก้อะไร |
 | `npm run migrate:prd` | เหมือน `migrate` แต่ปลายทางคือ PRD |
 | `npm run seed` | ใส่ข้อมูลตัวอย่าง |
+| `npm run auth:migrate-users` | ย้ายผู้ใช้จากระบบ auth เดิมเข้า Supabase Auth — ดูอย่างเดียวถ้าไม่ใส่ `-- --apply` |
 
 ## ฐานข้อมูล
 

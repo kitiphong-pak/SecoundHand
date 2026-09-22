@@ -9,7 +9,6 @@ export function mapUser(row: Record<string, unknown>): User {
     id: row.id as string,
     name: row.name as string,
     email: row.email as string,
-    passwordHash: row.password_hash as string,
     province: row.province as User["province"],
     role: row.role as User["role"],
     avatarUrl: (row.avatar_url as string | null) ?? undefined,

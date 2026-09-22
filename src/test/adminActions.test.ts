@@ -141,27 +141,26 @@ describe("ระงับบัญชีผู้ใช้", () => {
     expect(mock.current!.calls).toHaveLength(0);
   });
 
-  it("ระงับแล้วต้องเตะ session ของคนนั้นออกทันที ไม่ใช่รอหมดอายุเอง", async () => {
+  // การเตะออกทันทีย้ายไปอยู่ที่ getCurrentUser() ซึ่งเช็ค is_suspended ทุก request แล้ว (ดู
+  // src/lib/auth.test.ts) — ที่นี่เหลือแค่ต้องตั้ง flag ให้ถูกคน ถูกค่า
+  it("ระงับ → ตั้ง is_suspended = true ให้บัญชีเป้าหมาย", async () => {
     mock.current!.queueResult({ data: targetUser(), error: null });
-    mock.current!.queueResult({ data: null, error: null });
     mock.current!.queueResult({ data: null, error: null });
 
     const res = await suspend(post({ suspended: true }), userParams());
     expect(res.status).toBe(200);
-    expect(updateOf(mock.current!.callsTo("users")[1]).is_suspended).toBe(true);
-
-    const sessions = mock.current!.callsTo("sessions")[0];
-    expect(sessions).toBeDefined();
-    expect(hasOp(sessions, "eq", "user_id", "target-1")).toBe(true);
+    const update = mock.current!.callsTo("users")[1];
+    expect(updateOf(update).is_suspended).toBe(true);
+    expect(hasOp(update, "eq", "id", "target-1")).toBe(true);
   });
 
-  it("ปลดระงับไม่ต้องไปยุ่งกับ session", async () => {
+  it("ปลดระงับ → ตั้ง is_suspended = false", async () => {
     mock.current!.queueResult({ data: targetUser({ is_suspended: true }), error: null });
     mock.current!.queueResult({ data: null, error: null });
 
     const res = await suspend(post({ suspended: false }), userParams());
     expect(res.status).toBe(200);
-    expect(mock.current!.callsTo("sessions")).toHaveLength(0);
+    expect(updateOf(mock.current!.callsTo("users")[1]).is_suspended).toBe(false);
   });
 
   it("แอดมินระงับบัญชีตัวเองไม่ได้ → 400 (กันล็อกตัวเองออกจากระบบ)", async () => {
