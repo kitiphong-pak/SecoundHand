@@ -50,6 +50,14 @@ export async function POST(
     p_to_user_id: toUserId,
     p_amount: amount,
   });
+  // 23001 (restrict_violation) คือรหัสที่ create_offer ยิงกลับมาตอนมีข้อตกลงค้างอยู่แล้ว —
+  // เช็คจากรหัส ไม่ใช่ข้อความ เพราะข้อความใน migration แก้เมื่อไหร่ฝั่งนี้จะได้ไม่พังตาม
+  if (error?.code === "23001") {
+    return NextResponse.json(
+      { error: "ตกลงราคากันไปแล้ว ถ้าจะต่อรองใหม่ต้องยกเลิกข้อตกลงเดิมก่อน" },
+      { status: 409 }
+    );
+  }
   const row = (data as Record<string, unknown>[] | null)?.[0];
   if (error || !row) return NextResponse.json({ error: "เสนอราคาไม่สำเร็จ" }, { status: 500 });
 

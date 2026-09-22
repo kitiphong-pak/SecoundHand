@@ -10,7 +10,7 @@ const OFFER_BADGE = {
   pending: { label: "รอตอบรับ", status: "pending" as const },
   accepted: { label: "ตกลงราคานี้แล้ว", status: "success" as const },
   declined: { label: "ปฏิเสธข้อเสนอนี้แล้ว", status: "error" as const },
-  cancelled: { label: "ถูกแทนที่ด้วยข้อเสนอใหม่", status: "neutral" as const },
+  cancelled: { label: "ยกเลิกแล้ว", status: "neutral" as const },
 };
 
 function OfferBubble({
@@ -19,6 +19,7 @@ function OfferBubble({
   isSeller,
   onRespond,
   onBuy,
+  onCancelAgreement,
   loading,
 }: {
   offer: Offer;
@@ -26,6 +27,7 @@ function OfferBubble({
   isSeller: boolean;
   onRespond: (accept: boolean) => void;
   onBuy: () => void;
+  onCancelAgreement: () => void;
   loading: boolean;
 }) {
   const badge = OFFER_BADGE[offer.status];
@@ -67,6 +69,18 @@ function OfferBubble({
       )}
       {offer.status === "accepted" && isSeller && (
         <p className="mt-2 text-xs text-neutral-500">รอผู้ซื้อกดซื้อในราคานี้</p>
+      )}
+      {/* ยกเลิกได้ทั้งสองฝ่าย เพราะยังไม่มีออเดอร์เกิดขึ้น ทั้งคู่จึงยังเปลี่ยนใจได้ และนี่คือ
+          ทางเดียวที่จะกลับไปต่อรองราคาใหม่ได้ หลังตกลงกันแล้วปุ่มเสนอราคาจะถูกล็อกไว้ */}
+      {offer.status === "accepted" && (
+        <button
+          type="button"
+          disabled={loading}
+          onClick={onCancelAgreement}
+          className="mt-2 text-xs text-neutral-400 underline disabled:opacity-50"
+        >
+          ยกเลิกข้อตกลง
+        </button>
       )}
     </div>
   );
@@ -202,7 +216,20 @@ export function ChatThread({
     }
   };
 
+  const onCancelAgreement = async (offerId: string) => {
+    setBusyOfferId(offerId);
+    try {
+      await fetch(`/api/offers/${offerId}/cancel`, { method: "POST" });
+      load();
+    } finally {
+      setBusyOfferId(null);
+    }
+  };
+
   const offerById = new Map(offers.map((o) => [o.id, o]));
+  // ข้อตกลงที่ยังมีผลมีได้ครั้งละหนึ่งเดียว (ฐานข้อมูลบังคับไว้ใน migration 017) — ตราบใดที่ยังมี
+  // อยู่ ปุ่มเสนอราคาต้องหายไป ไม่ใช่ปล่อยให้กดแล้วค่อยไปเด้ง error กลับมาจากเซิร์ฟเวอร์
+  const acceptedOffer = offers.find((o) => o.status === "accepted") ?? null;
 
   return (
     <div className="flex flex-1 flex-col rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0">
@@ -227,6 +254,7 @@ export function ChatThread({
                     loading={busyOfferId === offer.id}
                     onRespond={(accept) => onRespondOffer(offer.id, accept)}
                     onBuy={() => onBuyWithOffer(offer)}
+                    onCancelAgreement={() => onCancelAgreement(offer.id)}
                   />
                 ) : (
                   <div
@@ -245,7 +273,7 @@ export function ChatThread({
         <div ref={bottomRef} />
       </div>
 
-      {canNegotiate && showOfferForm && (
+      {canNegotiate && !acceptedOffer && showOfferForm && (
         <form onSubmit={onSubmitOffer} className="flex flex-col gap-2 border-t border-neutral-100 p-3">
           <div className="flex items-center gap-2">
             <span className="text-sm text-neutral-500">฿</span>
@@ -270,7 +298,7 @@ export function ChatThread({
       )}
 
       <form onSubmit={onSend} className="flex items-center gap-2 border-t border-neutral-100 p-3">
-        {canNegotiate && !showOfferForm && (
+        {canNegotiate && !acceptedOffer && !showOfferForm && (
           <button
             type="button"
             onClick={() => setShowOfferForm(true)}

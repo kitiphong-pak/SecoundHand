@@ -11,7 +11,7 @@ import { ChatButton } from "@/components/ChatButton";
 import { ProductGallery } from "@/components/ProductGallery";
 import { LocationPinIcon } from "@/components/ui/LocationPinIcon";
 import { CONDITION_LABEL } from "@/lib/categories";
-import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
+import { orderStatusBadge } from "@/lib/orderStatus";
 import type { OrderStatus } from "@/types";
 
 export default async function ProductDetailPage({
@@ -40,14 +40,32 @@ export default async function ProductDetailPage({
   // สถานะ "reserved" อยู่ได้หลายจุดใน order flow — ต้องดูสถานะออเดอร์จริง ไม่งั้นจะค้าง
   // โชว์ "รอชำระเงิน" ทั้งที่จ่ายเงิน/ส่งของไปแล้ว (บั๊กเดียวกับที่เจอในหน้าสินค้าของฉัน)
   let activeOrderBadge = null;
+  let activeOrderHref: string | null = null;
+  let agreedAmount: number | null = null;
   if (product.status === "reserved") {
     const { data: orderRow } = await supabase
       .from("orders")
-      .select("status")
+      .select("id, status, buyer_id, seller_id, amount")
       .eq("product_id", product.id)
       .neq("status", "completed")
       .maybeSingle();
-    activeOrderBadge = ORDER_STATUS_LABEL[(orderRow?.status as OrderStatus) ?? "pending_payment"];
+
+    // หน้านี้ใครเปิดก็ได้ ไม่ใช่แค่คู่ซื้อขาย — คนนอกเห็นป้ายกลางๆ ส่วนคู่ซื้อขายเห็นป้ายที่
+    // บอกว่าตัวเองต้องทำอะไร และต้องมีทางไปหน้าออเดอร์ด้วย ไม่งั้นป้ายบอกให้ลงมือแต่กดไปไหนไม่ได้
+    const party =
+      orderRow?.buyer_id === user.id ? "buyer" : orderRow?.seller_id === user.id ? "seller" : undefined;
+    activeOrderBadge = orderStatusBadge((orderRow?.status as OrderStatus) ?? "pending_payment", party);
+    if (orderRow && party) {
+      activeOrderHref = `/orders/${orderRow.id}`;
+
+      // ราคาที่ลงขายกับยอดที่ตกลงกันจริงเป็นคนละตัว ถ้าปิดดีลผ่านการต่อรอง (amount มาจากข้อเสนอ
+      // ที่ตอบรับ ไม่ใช่ price) — หน้านี้โชว์แต่ป้ายราคาเดิม คู่ซื้อขายเลยเห็นเลขไม่ตรงกับในออเดอร์
+      //
+      // โชว์เฉพาะคู่ซื้อขายเท่านั้น เพราะหน้านี้คนนอกก็เปิดดูได้ ยอดที่ต่อรองกันเป็นเรื่องของสองคนนี้
+      // ไม่ใช่ข้อมูลที่ควรติดไว้หน้าร้านให้คนอื่นเห็นว่ากดราคาลงมาได้เท่าไหร่
+      const amount = Number(orderRow.amount);
+      if (Number.isFinite(amount) && amount !== product.price) agreedAmount = amount;
+    }
   }
 
   return (
@@ -68,9 +86,19 @@ export default async function ProductDetailPage({
             )}
           </div>
 
-          <p className="font-[var(--font-display)] text-2xl font-semibold text-primary-600">
-            ฿{product.price.toLocaleString("th-TH")}
-          </p>
+          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <p className="font-[var(--font-display)] text-2xl font-semibold text-primary-600">
+              ฿{(agreedAmount ?? product.price).toLocaleString("th-TH")}
+            </p>
+            {agreedAmount !== null && (
+              <>
+                <p className="text-sm text-neutral-400 line-through">
+                  ฿{product.price.toLocaleString("th-TH")}
+                </p>
+                <span className="text-xs text-neutral-500">ราคาที่ตกลงกัน</span>
+              </>
+            )}
+          </div>
 
           <div className="flex flex-wrap gap-2 text-xs text-neutral-500">
             <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2.5 py-1">
@@ -112,11 +140,20 @@ export default async function ProductDetailPage({
             {product.sellerId !== user.id && (
               <ChatButton productId={product.id} sellerId={product.sellerId} />
             )}
-            <BuyButton
-              productId={product.id}
-              disabled={product.status !== "listed" || product.sellerId === user.id}
-              isOwner={product.sellerId === user.id}
-            />
+            {activeOrderHref ? (
+              <Link
+                href={activeOrderHref}
+                className="flex-1 rounded-[var(--radius-md)] bg-primary-500 px-5 py-3 text-center text-base font-medium text-white transition-colors hover:bg-primary-600"
+              >
+                ไปที่หน้าออเดอร์ →
+              </Link>
+            ) : (
+              <BuyButton
+                productId={product.id}
+                disabled={product.status !== "listed" || product.sellerId === user.id}
+                isOwner={product.sellerId === user.id}
+              />
+            )}
           </div>
         </div>
       </main>

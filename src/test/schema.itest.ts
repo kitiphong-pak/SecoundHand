@@ -136,3 +136,109 @@ describe("index กันขายสินค้าชิ้นเดียว�
     ).resolves.toBeDefined();
   });
 });
+
+// ---- การต่อรองราคา (migration 016 + 017) ----
+//
+// ชั้นนี้เทสด้วย mock ไม่ได้เลย เพราะตรรกะทั้งหมดอยู่ใน plpgsql ฝั่งฐานข้อมูล ไม่ใช่ใน TypeScript
+// สิ่งที่ต้องพิสูจน์คือ "ข้อตกลงที่ยังมีผลมีได้ครั้งละหนึ่งเดียว" จริงไหม ต่อให้ยิงตรงเข้า SQL
+async function seedPair() {
+  await db.truncateAll();
+  const [seller] = await q<{ id: string }>(
+    `insert into users (name, email, password_hash, province) values ('ผู้ขาย','s@x.com','h','เชียงใหม่') returning id`
+  );
+  const [buyer] = await q<{ id: string }>(
+    `insert into users (name, email, password_hash, province) values ('ผู้ซื้อ','b@x.com','h','เชียงใหม่') returning id`
+  );
+  const [product] = await q<{ id: string }>(
+    `insert into products (seller_id, title, description, price, category, condition, province)
+     values ($1,'เก้าอี้','ดี',1000,'เฟอร์นิเจอร์','good','เชียงใหม่') returning id`,
+    [seller.id]
+  );
+  return { sellerId: seller.id, buyerId: buyer.id, productId: product.id };
+}
+
+const makeOffer = (productId: string, from: string, to: string, amount: number) =>
+  q<{ id: string; status: string }>(
+    `select * from create_offer($1,$2,$3,$4)`,
+    [productId, from, to, amount]
+  );
+
+const accept = (offerId: string, responderId: string) =>
+  q(`select * from respond_offer($1,$2,true)`, [offerId, responderId]);
+
+describe("ข้อตกลงราคามีได้ครั้งละหนึ่งเดียว (migration 017)", () => {
+  it("เสนอราคาใหม่ไม่ได้ถ้ายังมีข้อตกลงค้างอยู่ — ฟังก์ชันยิง errcode 23001 กลับมา", async () => {
+    const { sellerId, buyerId, productId } = await seedPair();
+    const [offer] = await makeOffer(productId, buyerId, sellerId, 900);
+    await accept(offer.id, sellerId);
+
+    await expect(makeOffer(productId, buyerId, sellerId, 800)).rejects.toThrow(
+      /offer_already_accepted/
+    );
+  });
+
+  // ข้อเสนอต่อรองกลับไปกลับมาได้ ถ้า index ไม่ normalize คู่ด้วย least/greatest ทิศทางที่กลับกัน
+  // จะนับเป็นคนละคู่ แล้วมีข้อตกลงค้างพร้อมกันสองอันได้เหมือนเดิม — ข้อนี้คือตัวจับกรณีนั้น
+  it("ฐานข้อมูลปฏิเสธข้อตกลงที่สองของคู่เดิม แม้จะสลับทิศทาง from/to", async () => {
+    const { sellerId, buyerId, productId } = await seedPair();
+    await q(
+      `insert into offers (product_id, from_user_id, to_user_id, amount, status)
+       values ($1,$2,$3,900,'accepted')`,
+      [productId, buyerId, sellerId]
+    );
+
+    await expect(
+      q(
+        `insert into offers (product_id, from_user_id, to_user_id, amount, status)
+         values ($1,$2,$3,850,'accepted')`,
+        [productId, sellerId, buyerId]
+      )
+    ).rejects.toThrow();
+  });
+
+  it("ยกเลิกข้อตกลงแล้วต่อรองใหม่ได้ และมีข้อความแจ้งในแชทให้อีกฝ่ายเห็น", async () => {
+    const { sellerId, buyerId, productId } = await seedPair();
+    const [offer] = await makeOffer(productId, buyerId, sellerId, 900);
+    await accept(offer.id, sellerId);
+
+    const cancelled = await q<{ status: string }>(
+      `select * from cancel_offer_agreement($1,$2)`,
+      [offer.id, buyerId]
+    );
+    expect(cancelled[0].status).toBe("cancelled");
+
+    const msgs = await q<{ text: string }>(
+      `select text from chat_messages where product_id = $1 order by created_at`,
+      [productId]
+    );
+    expect(msgs.at(-1)!.text).toContain("ยกเลิกข้อตกลง");
+
+    // พอไม่มีข้อตกลงค้างแล้ว ต้องเสนอราคาใหม่ได้ตามปกติ ไม่ใช่ล็อกตายถาวร
+    const [again] = await makeOffer(productId, buyerId, sellerId, 800);
+    expect(again.status).toBe("pending");
+  });
+
+  it("คนนอกวงสนทนายกเลิกข้อตกลงของคนอื่นไม่ได้", async () => {
+    const { sellerId, buyerId, productId } = await seedPair();
+    const [stranger] = await q<{ id: string }>(
+      `insert into users (name, email, password_hash, province) values ('คนนอก','x@x.com','h','เชียงใหม่') returning id`
+    );
+    const [offer] = await makeOffer(productId, buyerId, sellerId, 900);
+    await accept(offer.id, sellerId);
+
+    const rows = await q(`select * from cancel_offer_agreement($1,$2)`, [offer.id, stranger.id]);
+    expect(rows).toEqual([]);
+
+    const [still] = await q<{ status: string }>(`select status from offers where id = $1`, [offer.id]);
+    expect(still.status).toBe("accepted");
+  });
+
+  it("ข้อเสนอที่ยัง pending ยังถูกแทนที่ด้วยข้อเสนอใหม่ได้เหมือนเดิม (ไม่ได้ล็อกทุกกรณี)", async () => {
+    const { sellerId, buyerId, productId } = await seedPair();
+    const [first] = await makeOffer(productId, buyerId, sellerId, 900);
+    await makeOffer(productId, buyerId, sellerId, 850);
+
+    const [old] = await q<{ status: string }>(`select status from offers where id = $1`, [first.id]);
+    expect(old.status).toBe("cancelled");
+  });
+});

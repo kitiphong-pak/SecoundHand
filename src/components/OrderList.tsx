@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
-import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
+import { orderStatusBadge } from "@/lib/orderStatus";
 import { URGENCY_LABEL, URGENCY_ORDER, type UrgencyTier } from "@/lib/orderUrgency";
 import type { OrderStatus } from "@/types";
 
@@ -65,7 +65,7 @@ export function OrderList({ orders }: { orders: OrderRow[] }) {
           </h2>
           <div className="flex flex-col gap-3">
             {group.rows.map((order) => {
-              const badge = ORDER_STATUS_LABEL[order.status];
+              const badge = orderStatusBadge(order.status, order.isBuyer ? "buyer" : "seller");
               const seenAt = seenMap[order.id];
               const isNew = !seenAt || seenAt < order.lastActivityAt;
               return (
