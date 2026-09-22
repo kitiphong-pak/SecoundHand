@@ -144,14 +144,14 @@ describe("index กันขายสินค้าชิ้นเดียว�
 async function seedPair() {
   await db.truncateAll();
   const [seller] = await q<{ id: string }>(
-    `insert into users (name, email, password_hash, province) values (ผู้ขาย,s@x.com,h,เชียงใหม่) returning id`
+    `insert into users (name, email, password_hash, province) values ('ผู้ขาย','s@x.com','h','เชียงใหม่') returning id`
   );
   const [buyer] = await q<{ id: string }>(
-    `insert into users (name, email, password_hash, province) values (ผู้ซื้อ,b@x.com,h,เชียงใหม่) returning id`
+    `insert into users (name, email, password_hash, province) values ('ผู้ซื้อ','b@x.com','h','เชียงใหม่') returning id`
   );
   const [product] = await q<{ id: string }>(
     `insert into products (seller_id, title, description, price, category, condition, province)
-     values ($1,เก้าอี้,ดี,1000,เฟอร์นิเจอร์,good,เชียงใหม่) returning id`,
+     values ($1,'เก้าอี้','ดี',1000,'เฟอร์นิเจอร์','good','เชียงใหม่') returning id`,
     [seller.id]
   );
   return { sellerId: seller.id, buyerId: buyer.id, productId: product.id };
@@ -221,7 +221,7 @@ describe("ข้อตกลงราคามีได้ครั้งละ�
   it("คนนอกวงสนทนายกเลิกข้อตกลงของคนอื่นไม่ได้", async () => {
     const { sellerId, buyerId, productId } = await seedPair();
     const [stranger] = await q<{ id: string }>(
-      `insert into users (name, email, password_hash, province) values (คนนอก,x@x.com,h,เชียงใหม่) returning id`
+      `insert into users (name, email, password_hash, province) values ('คนนอก','x@x.com','h','เชียงใหม่') returning id`
     );
     const [offer] = await makeOffer(productId, buyerId, sellerId, 900);
     await accept(offer.id, sellerId);
