@@ -6,9 +6,8 @@
 
 ย้ายไปแล้วใน branch `feature/supabase-auth` (migration 018, [src/lib/supabaseAuth.ts](../src/lib/supabaseAuth.ts), [src/proxy.ts](../src/proxy.ts)) ที่เหลือคือ:
 
-- **ลบตาราง `sessions` กับคอลัมน์ `users.password_hash`** ทำเป็น migration ใหม่ หลังรัน `npm run auth:migrate-users:apply` กับ UAT ครบ และลองล็อกอินด้วยบัญชีเดิมผ่านแล้วเท่านั้น
 - **ลืมรหัสผ่าน / ยืนยันอีเมล** Supabase มีให้แล้ว แต่ SMTP ตั้งต้นของ Supabase ส่งได้เฉพาะอีเมลของสมาชิกทีมโปรเจกต์ ต้องตั้ง SMTP ของตัวเองก่อน (เช่น Resend หรือ SES) ตอนนี้สมัครผ่าน `admin.createUser` แบบถือว่ายืนยันอีเมลแล้ว เหมือนระบบเดิมที่ไม่มีการยืนยัน
-- **PRD** ตอนปลุก PRD ต้องรัน `migrate:prd` ให้ถึง 018 ด้วย PRD ยังไม่มีผู้ใช้ จึงไม่ต้องรันสคริปต์ย้าย
+- **PRD** ตอนปลุก PRD ต้องรัน `migrate:prd` ให้ถึง 019 ด้วย PRD ยังไม่มีผู้ใช้ จึงไม่ต้องย้ายผู้ใช้ และด่านตรวจใน 019 ผ่านได้เพราะมีแค่บัญชีระบบที่มี hash
 
 ## Flow ออเดอร์ใหม่ (ไม่ผ่านเงิน ไม่มี OTP)
 

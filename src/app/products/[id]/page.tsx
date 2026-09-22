@@ -35,7 +35,7 @@ export default async function ProductDetailPage({
   // อยู่แล้ว แต่พอเปิดสาธารณะ ลิงก์เก่าที่ค้างอยู่ในกลุ่ม Facebook จะพาคนนอกมาเจอของที่ถอนไปแล้ว
   if (product.status === "removed" && !isOwner) notFound();
 
-  // เลือกเฉพาะคอลัมน์ที่ต้องใช้แสดงผล ไม่ดึง password_hash ขึ้นมาไว้ในหน่วยความจำเลยตั้งแต่ต้น
+  // เลือกเฉพาะคอลัมน์ที่ต้องใช้แสดงผล ไม่ดึงอีเมลของผู้ขายขึ้นมาไว้ในหน่วยความจำเลยตั้งแต่ต้น
   const { data: seller } = await supabase
     .from("users")
     .select("name, is_verified")

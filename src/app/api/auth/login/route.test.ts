@@ -36,7 +36,6 @@ const userRow = (over: Record<string, unknown> = {}) => ({
   id: "user-1",
   name: "ผู้ใช้ทั่วไป",
   email: "user@example.com",
-  password_hash: null,
   province: "เชียงใหม่",
   role: "user",
   avatar_url: null,
@@ -92,13 +91,6 @@ describe("ผู้ใช้ทั่วไปยังล็อกอินไ�
     expect(res.status).toBe(200);
     expect((await res.json()).user.email).toBe("user@example.com");
     expect(auth.signOutCalls).toBe(0);
-  });
-
-  // ผู้ใช้ที่ย้ายมาจากระบบเดิมยังมี hash ค้างในตารางจนกว่าสคริปต์ย้ายจะล้างให้
-  it("ไม่คืน password hash กลับไปกับ response แม้ในตารางจะยังมีค้างอยู่", async () => {
-    mock.current!.queueResult({ data: userRow({ password_hash: "$2b$10$leftover" }), error: null });
-    const body = await (await login("user@example.com")).json();
-    expect(JSON.stringify(body)).not.toContain("$2b$10$");
   });
 
   it("รหัสผ่านผิด → 401 และไม่ไปอ่านโปรไฟล์ต่อ", async () => {

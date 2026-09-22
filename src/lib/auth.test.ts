@@ -27,7 +27,6 @@ const userRow = (over: Record<string, unknown> = {}) => ({
   id: "user-1",
   name: "ผู้ใช้",
   email: "user@example.com",
-  password_hash: null,
   province: "เชียงใหม่",
   role: "user",
   avatar_url: null,
@@ -55,11 +54,6 @@ describe("getCurrentUser", () => {
     const user = await getCurrentUser();
     expect(user?.id).toBe("user-1");
     expect(hasOp(mock.current!.callsTo("users")[0], "eq", "id", "user-1")).toBe(true);
-  });
-
-  it("ไม่พา password_hash ที่ค้างอยู่ในตารางติดออกมา", async () => {
-    mock.current!.queueResult({ data: userRow({ password_hash: "$2b$10$leftover" }), error: null });
-    expect(JSON.stringify(await getCurrentUser())).not.toContain("$2b$10$");
   });
 
   // ข้อนี้คือเหตุผลที่แอดมินกดระงับแล้วมีผลทันที — ไม่ต้องรอ token หมดอายุ
