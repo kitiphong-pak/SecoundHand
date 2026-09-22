@@ -8,6 +8,7 @@ import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { PROVINCES } from "@/lib/provinces";
 import { loginHref } from "@/lib/safeRedirect";
+import { NETWORK_ERROR, errorMessage, readJson } from "@/lib/apiResponse";
 
 // next ผ่าน safeNextPath มาแล้วจาก page.tsx ฝั่งเซิร์ฟเวอร์ — ที่นี่ใช้ได้เลย ไม่ต้องเช็คซ้ำ
 export function RegisterForm({ next }: { next: string }) {
@@ -29,20 +30,22 @@ export function RegisterForm({ next }: { next: string }) {
     };
 
     try {
+      // แยก "ต่อเซิร์ฟเวอร์ไม่ได้" ออกจาก "เซิร์ฟเวอร์ตอบมาแต่พัง" — ดูเหตุผลใน src/lib/apiResponse.ts
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      });
-      const data = await res.json();
+      }).catch(() => null);
+      if (!res) {
+        setError(NETWORK_ERROR);
+        return;
+      }
       if (!res.ok) {
-        setError(data.error ?? "เกิดข้อผิดพลาด กรุณาลองใหม่");
+        setError(errorMessage(res.status, await readJson(res)));
         return;
       }
       router.push(next);
       router.refresh();
-    } catch {
-      setError("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ");
     } finally {
       setSubmitting(false);
     }

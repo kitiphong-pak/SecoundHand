@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { NETWORK_ERROR, errorMessage, readJson } from "@/lib/apiResponse";
 
 // next ผ่าน safeNextPath มาแล้วจาก page.tsx ฝั่งเซิร์ฟเวอร์ — ที่นี่ใช้ได้เลย ไม่ต้องเช็คซ้ำ
 export function LoginForm({ next }: { next: string }) {
@@ -24,20 +25,24 @@ export function LoginForm({ next }: { next: string }) {
     };
 
     try {
+      // แยก "ต่อเซิร์ฟเวอร์ไม่ได้" ออกจาก "เซิร์ฟเวอร์ตอบมาแต่พัง" — เดิม catch ครอบทั้งสองอย่าง
+      // error 500 เลยขึ้นว่าเชื่อมต่อไม่สำเร็จ ผู้ใช้ไปเช็คเน็ตตัวเองทั้งที่ปัญหาอยู่ที่เซิร์ฟเวอร์
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "เกิดข้อผิดพลาด กรุณาลองใหม่");
+      }).catch(() => null);
+      if (!res) {
+        setError(NETWORK_ERROR);
+        return;
+      }
+      const data = await readJson<{ user?: { role: string }; error?: string }>(res);
+      if (!res.ok || !data?.user) {
+        setError(errorMessage(res.status, data));
         return;
       }
       router.push(data.user.role === "admin" ? "/admin" : next);
       router.refresh();
-    } catch {
-      setError("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ");
     } finally {
       setSubmitting(false);
     }
