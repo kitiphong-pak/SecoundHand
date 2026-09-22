@@ -36,6 +36,6 @@ export async function POST(
     metadata: { name: target.name },
   });
 
-  // ไม่ส่ง user row เต็มกลับไป (มี password_hash ติดมาด้วย) — client แค่ต้องรู้ว่าสำเร็จหรือไม่
+  // ไม่ส่ง user row เต็มกลับไป — client แค่ต้องรู้ว่าสำเร็จหรือไม่
   return NextResponse.json({ ok: true, isVerified: verified });
 }

@@ -43,7 +43,6 @@ const targetUser = (over: Record<string, unknown> = {}) => ({
   id: "target-1",
   name: "เป้าหมาย",
   email: "target@example.com",
-  password_hash: "$2b$10$hash",
   province: "เชียงใหม่",
   role: "user",
   is_verified: false,
@@ -199,12 +198,12 @@ describe("ยืนยันตัวตนผู้ใช้", () => {
     expect(updateOf(mock.current!.callsTo("users")[1]).is_verified).toBe(true);
   });
 
-  it("ไม่คืน password hash กลับไปกับ response", async () => {
+  it("ไม่คืน row ผู้ใช้ทั้งแถวกลับไปกับ response (เช่นอีเมลของเป้าหมาย)", async () => {
     mock.current!.queueResult({ data: targetUser(), error: null });
     mock.current!.queueResult({ data: null, error: null });
 
     const body = await (await verify(post({ verified: true }), userParams())).json();
-    expect(JSON.stringify(body)).not.toContain("$2b$10$");
+    expect(JSON.stringify(body)).not.toContain("target@example.com");
   });
 
   it("แอดมินแก้บัญชีแอดมินด้วยกันไม่ได้ → 403", async () => {

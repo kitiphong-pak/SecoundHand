@@ -54,7 +54,7 @@ export default async function ChatPage({
     );
   }
 
-  // เลือกเฉพาะ id/name ที่ ChatThread (client component) ต้องใช้ — ไม่ดึง password_hash
+  // เลือกเฉพาะ id/name ที่ ChatThread (client component) ต้องใช้ — ไม่ดึงอีเมลหรือข้อมูลอื่นติดไป
   // ขึ้นมาไว้ในหน่วยความจำเลยตั้งแต่ต้น กัน hash หลุดไปกับ RSC payload ถ้ามีคนแก้โค้ดพลาดอนาคต
   const { data: otherUser } = await supabase
     .from("users")

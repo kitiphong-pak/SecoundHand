@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { startTestDb, migrationFiles, type TestDb } from "@/test/pgContainer";
 
 // เทสชั้นกลาง — Postgres จริงในคอนเทนเนอร์ ไม่ใช่ mock
@@ -38,7 +40,6 @@ describe("ไฟล์ migration", () => {
     const names = rows.map((r) => r.tablename);
     for (const t of [
       "users",
-      "sessions",
       "products",
       "orders",
       "reviews",
@@ -77,9 +78,19 @@ describe("ไฟล์ migration", () => {
     }
   });
 
-  // migration 018: รหัสผ่านย้ายไปอยู่ใน Supabase Auth ผู้ใช้ที่สมัครใหม่จึงไม่มี hash ในตารางนี้
-  // ถ้าคอลัมน์ยังเป็น not null อยู่ การสมัครสมาชิกจะพังทุกครั้งตอนบันทึกโปรไฟล์
-  it("สร้างผู้ใช้ได้โดยไม่มี password_hash (migration 018)", async () => {
+  // migration 018 + 019: รหัสผ่านอยู่ที่ Supabase Auth ที่เดียว ของเดิมในตารางเราต้องหายไปหมด
+  it("ไม่เหลือตาราง sessions และคอลัมน์ users.password_hash แล้ว (migration 019)", async () => {
+    const [{ sessions }] = await q<{ sessions: string | null }>(`select to_regclass('public.sessions') as sessions`);
+    expect(sessions).toBeNull();
+
+    const cols = await q<{ column_name: string }>(
+      `select column_name from information_schema.columns
+       where table_schema = 'public' and table_name = 'users'`
+    );
+    expect(cols.map((c) => c.column_name)).not.toContain("password_hash");
+  });
+
+  it("สร้างผู้ใช้ได้ด้วยข้อมูลโปรไฟล์อย่างเดียว ไม่มีช่องรหัสผ่าน", async () => {
     await db.truncateAll();
     await expect(
       q(
@@ -87,19 +98,53 @@ describe("ไฟล์ migration", () => {
       )
     ).resolves.toBeDefined();
   });
+
+  // ด่านกันพลาดของ 019: ถ้ายังมีผู้ใช้ที่ไม่ได้ย้ายเข้า Supabase Auth (ยังมี hash อยู่) ต้องล้มทั้งไฟล์
+  // ไม่งั้นลบคอลัมน์ไปแล้ว hash ของคนพวกนั้นหายถาวร ล็อกอินไม่ได้อีกเลย
+  // ทดสอบโดยสร้างคอลัมน์คืนชั่วคราว แล้วรันเฉพาะส่วนตรวจของไฟล์ 019 ซ้ำ
+  describe("ด่านกันพลาดของ migration 019", () => {
+    const guard = () => {
+      const sql = readFileSync(path.join(process.cwd(), "supabase", "migrations", "019_drop_legacy_auth.sql"), "utf8");
+      const block = sql.match(/do \$\$[\s\S]*?end \$\$;/);
+      if (!block) throw new Error("หาส่วนตรวจใน 019 ไม่เจอ");
+      return q(block[0]);
+    };
+
+    beforeAll(async () => {
+      await q(`alter table users add column password_hash text`);
+    });
+    afterAll(async () => {
+      await q(`alter table users drop column if exists password_hash`);
+    });
+
+    it("ยังมีผู้ใช้จริงที่มี hash → ปฏิเสธ พร้อมบอกจำนวนคน", async () => {
+      await db.truncateAll();
+      await q(`insert into users (name, email, province, password_hash) values ('ยังไม่ย้าย','old@x.com','เชียงใหม่','$2b$10$x')`);
+      await expect(guard()).rejects.toThrow(/ยังมีผู้ใช้ 1 คน/);
+    });
+
+    it("มีแค่บัญชีระบบที่ยังมี hash → ผ่าน (บัญชีนี้ตั้งใจไม่ย้าย)", async () => {
+      await db.truncateAll();
+      await q(
+        `insert into users (id, name, email, province, password_hash)
+         values ('00000000-0000-0000-0000-000000000001','ระบบ','system@x.com','กรุงเทพมหานคร','$2b$10$x')`
+      );
+      await expect(guard()).resolves.toBeDefined();
+    });
+  });
 });
 
 describe("index กันขายสินค้าชิ้นเดียวซ้ำ (migration 008)", () => {
   it("ปฏิเสธออเดอร์ที่ยังไม่จบใบที่สองของสินค้าเดียวกันที่ระดับฐานข้อมูล", async () => {
     await db.truncateAll();
     const [seller] = await q<{ id: string }>(
-      `insert into users (name, email, password_hash, province) values ('ผู้ขาย','s@x.com','h','เชียงใหม่') returning id`
+      `insert into users (name, email, province) values ('ผู้ขาย','s@x.com','เชียงใหม่') returning id`
     );
     const [buyerA] = await q<{ id: string }>(
-      `insert into users (name, email, password_hash, province) values ('ผู้ซื้อ A','a@x.com','h','เชียงใหม่') returning id`
+      `insert into users (name, email, province) values ('ผู้ซื้อ A','a@x.com','เชียงใหม่') returning id`
     );
     const [buyerB] = await q<{ id: string }>(
-      `insert into users (name, email, password_hash, province) values ('ผู้ซื้อ B','b@x.com','h','เชียงใหม่') returning id`
+      `insert into users (name, email, province) values ('ผู้ซื้อ B','b@x.com','เชียงใหม่') returning id`
     );
     const [product] = await q<{ id: string }>(
       `insert into products (seller_id, title, description, price, category, condition, province)
@@ -124,10 +169,10 @@ describe("index กันขายสินค้าชิ้นเดียว�
   it("แต่ยอมให้สั่งซื้อใหม่ได้ ถ้าใบเดิมถูกยกเลิกไปแล้ว", async () => {
     await db.truncateAll();
     const [seller] = await q<{ id: string }>(
-      `insert into users (name, email, password_hash, province) values ('ผู้ขาย','s@x.com','h','เชียงใหม่') returning id`
+      `insert into users (name, email, province) values ('ผู้ขาย','s@x.com','เชียงใหม่') returning id`
     );
     const [buyer] = await q<{ id: string }>(
-      `insert into users (name, email, password_hash, province) values ('ผู้ซื้อ','a@x.com','h','เชียงใหม่') returning id`
+      `insert into users (name, email, province) values ('ผู้ซื้อ','a@x.com','เชียงใหม่') returning id`
     );
     const [product] = await q<{ id: string }>(
       `insert into products (seller_id, title, description, price, category, condition, province)
@@ -155,10 +200,10 @@ describe("index กันขายสินค้าชิ้นเดียว�
 async function seedPair() {
   await db.truncateAll();
   const [seller] = await q<{ id: string }>(
-    `insert into users (name, email, password_hash, province) values ('ผู้ขาย','s@x.com','h','เชียงใหม่') returning id`
+    `insert into users (name, email, province) values ('ผู้ขาย','s@x.com','เชียงใหม่') returning id`
   );
   const [buyer] = await q<{ id: string }>(
-    `insert into users (name, email, password_hash, province) values ('ผู้ซื้อ','b@x.com','h','เชียงใหม่') returning id`
+    `insert into users (name, email, province) values ('ผู้ซื้อ','b@x.com','เชียงใหม่') returning id`
   );
   const [product] = await q<{ id: string }>(
     `insert into products (seller_id, title, description, price, category, condition, province)
@@ -232,7 +277,7 @@ describe("ข้อตกลงราคามีได้ครั้งละ�
   it("คนนอกวงสนทนายกเลิกข้อตกลงของคนอื่นไม่ได้", async () => {
     const { sellerId, buyerId, productId } = await seedPair();
     const [stranger] = await q<{ id: string }>(
-      `insert into users (name, email, password_hash, province) values ('คนนอก','x@x.com','h','เชียงใหม่') returning id`
+      `insert into users (name, email, province) values ('คนนอก','x@x.com','เชียงใหม่') returning id`
     );
     const [offer] = await makeOffer(productId, buyerId, sellerId, 900);
     await accept(offer.id, sellerId);

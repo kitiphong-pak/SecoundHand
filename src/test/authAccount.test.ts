@@ -61,7 +61,6 @@ const userRow = (over: Record<string, unknown> = {}) => ({
   id: "user-1",
   name: "ผู้ใช้",
   email: "user@example.com",
-  password_hash: null,
   province: "เชียงใหม่",
   role: "user",
   avatar_url: null,
@@ -246,12 +245,6 @@ describe("แก้ไขโปรไฟล์", () => {
     const update = mock.current!.callsTo("users")[0];
     expect(hasOp(update, "eq", "id", USER.id)).toBe(true);
     expect(JSON.stringify(update.ops)).not.toContain("victim-9");
-  });
-
-  it("ไม่คืน password hash กลับไปกับ response แม้ในตารางยังค้างอยู่", async () => {
-    mock.current!.queueResult({ data: userRow({ password_hash: "$2b$10$leftover" }), error: null });
-    const body = await (await updateProfile(send(good, "PATCH"))).json();
-    expect(JSON.stringify(body)).not.toContain("$2b$10$");
   });
 
   it("รูปโปรไฟล์ที่ชี้ไปโดเมนอื่น → 400", async () => {
