@@ -5,42 +5,64 @@ import { supabase } from "@/lib/supabase";
 import { mapProduct } from "@/lib/mappers";
 import { Header } from "@/components/Header";
 import { ProductCard } from "@/components/ProductCard";
+import { ProvinceFilter } from "@/components/ProvinceFilter";
+import { PROVINCES } from "@/lib/provinces";
 
 const PAGE_SIZE = 24;
 
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  // หน้านี้เปิดให้คนที่ยังไม่ได้เข้าสู่ระบบดูได้ — คนที่กดลิงก์มาจากกลุ่ม Facebook ต้องเห็นของก่อน
+  // ถ้าเจอหน้าล็อกอินตั้งแต่แรก ส่วนใหญ่ปิดหน้าไปเลย ไม่มีใครสมัครสมาชิกเพื่อไปดูว่ามีอะไรขายบ้าง
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  if (user.role === "admin") redirect("/admin");
+  if (user?.role === "admin") redirect("/admin");
 
   const params = await searchParams;
   const page = Math.max(1, Number(params.page) || 1);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  // ฟีเจอร์หลัก: กรองสินค้าตามจังหวัดของผู้ใช้งานโดยอัตโนมัติ — ใส่ .range() แบ่งหน้าไว้ด้วย
-  // ไม่งั้นจังหวัดที่มีสินค้าลงขายเยอะๆ จะโหลดทุกชิ้นมาในคำขอเดียวโดยไม่มีขีดจำกัดเลย
-  const { data: rows, count } = await supabase
+  // สมาชิกเห็นสินค้าในจังหวัดตัวเองอัตโนมัติเหมือนเดิม ส่วนคนนอกเลือกจังหวัดเองจาก ?province=
+  // ต้องเทียบกับรายชื่อจังหวัดจริงก่อนเอาไปใช้ ไม่งั้นใครใส่ค่าอะไรมาก็ถูกยิงเข้า query ตรงๆ
+  const requested = Array.isArray(params.province) ? params.province[0] : params.province;
+  const guestProvince =
+    requested && (PROVINCES as readonly string[]).includes(requested) ? requested : null;
+  const province = user ? user.province : guestProvince;
+
+  // ฟีเจอร์หลัก: กรองสินค้าตามจังหวัด — ใส่ .range() แบ่งหน้าไว้ด้วย ไม่งั้นจังหวัดที่มีสินค้า
+  // ลงขายเยอะๆ จะโหลดทุกชิ้นมาในคำขอเดียวโดยไม่มีขีดจำกัดเลย
+  let query = supabase
     .from("products")
     .select("*", { count: "exact" })
-    .eq("province", user.province)
     .eq("status", "listed")
     .order("created_at", { ascending: false })
     .range(from, to);
+  if (province) query = query.eq("province", province);
+  const { data: rows, count } = await query;
   const products = (rows ?? []).map(mapProduct);
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
   // แนะนำให้ผู้ใช้ใหม่ที่ยังไม่เคยลงขายอะไรเลยไปลองลงขายชิ้นแรก — เช็คแบบ count เฉยๆ
   // ไม่ต้องดึงข้อมูลสินค้าจริงมาทั้งก้อน เร็วกว่าและเบากว่า
-  const { count: listingCount } = await supabase
-    .from("products")
-    .select("id", { count: "exact", head: true })
-    .eq("seller_id", user.id);
-  const isFirstTimeSeller = (listingCount ?? 0) === 0;
+  let isFirstTimeSeller = false;
+  if (user) {
+    const { count: listingCount } = await supabase
+      .from("products")
+      .select("id", { count: "exact", head: true })
+      .eq("seller_id", user.id);
+    isFirstTimeSeller = (listingCount ?? 0) === 0;
+  }
+
+  const pageHref = (p: number) => {
+    const qs = new URLSearchParams();
+    if (!user && guestProvince) qs.set("province", guestProvince);
+    if (p > 1) qs.set("page", String(p));
+    const s = qs.toString();
+    return s ? `/?${s}` : "/";
+  };
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-neutral-50">
@@ -66,20 +88,27 @@ export default async function HomePage({
           </Link>
         )}
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="font-[var(--font-display)] text-xl font-semibold text-neutral-900">
-              สินค้าใน{user.province}
+              {province ? `สินค้าใน${province}` : "สินค้ามือสองทุกจังหวัด"}
             </h1>
             <p className="mt-1 text-sm text-neutral-500">
-              แสดงเฉพาะสินค้าในจังหวัดของคุณ เพื่อความสะดวกในการนัดรับ-ส่ง
+              {user
+                ? "แสดงเฉพาะสินค้าในจังหวัดของคุณ เพื่อความสะดวกในการนัดรับ-ส่ง"
+                : "เลือกจังหวัดของคุณเพื่อดูของที่นัดรับได้ใกล้บ้าน"}
             </p>
           </div>
+          {!user && <ProvinceFilter value={guestProvince} />}
         </div>
 
         {products.length === 0 ? (
           <div className="mt-10 rounded-[var(--radius-lg)] border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-500">
-            {page === 1 ? `ยังไม่มีสินค้าประกาศขายใน${user.province}ตอนนี้` : "ไม่มีสินค้าในหน้านี้แล้ว"}
+            {page > 1
+              ? "ไม่มีสินค้าในหน้านี้แล้ว"
+              : province
+                ? `ยังไม่มีสินค้าประกาศขายใน${province}ตอนนี้`
+                : "ยังไม่มีสินค้าประกาศขายตอนนี้"}
           </div>
         ) : (
           <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -92,7 +121,7 @@ export default async function HomePage({
         {totalPages > 1 && (
           <div className="mt-6 flex items-center justify-between text-sm">
             {page > 1 ? (
-              <Link href={`/?page=${page - 1}`} className="text-primary-600 hover:underline">
+              <Link href={pageHref(page - 1)} className="text-primary-600 hover:underline">
                 ← ก่อนหน้า
               </Link>
             ) : (
@@ -102,7 +131,7 @@ export default async function HomePage({
               หน้า {page} / {totalPages}
             </span>
             {page < totalPages ? (
-              <Link href={`/?page=${page + 1}`} className="text-primary-600 hover:underline">
+              <Link href={pageHref(page + 1)} className="text-primary-600 hover:underline">
                 ถัดไป →
               </Link>
             ) : (

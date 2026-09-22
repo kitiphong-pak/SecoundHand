@@ -8,6 +8,7 @@ import { UserMenu } from "@/components/UserMenu";
 import { BrandLogo } from "@/components/ui/BrandLogo";
 import { LocationPinIcon } from "@/components/ui/LocationPinIcon";
 import { HomeIcon, InventoryIcon, ListIcon, ChatIcon } from "@/components/ui/NavIcons";
+import { loginHref } from "@/lib/safeRedirect";
 
 interface Badges {
   unreadChats: number;
@@ -73,7 +74,41 @@ function BottomNavItem({
   );
 }
 
-export function Header({ user }: { user: PublicUser }) {
+// user เป็น null ได้ในหน้าที่คนนอกเปิดดูได้ (หน้าแรก/หน้าสินค้า/โปรไฟล์ผู้ขาย) — คนที่กดลิงก์มาจาก
+// กลุ่ม Facebook จะเห็นแค่โลโก้กับปุ่มเข้าสู่ระบบ/สมัคร ไม่เห็นเมนูที่กดแล้วเด้งไปหน้าล็อกอินอยู่ดี
+export function Header({ user }: { user: PublicUser | null }) {
+  if (!user) return <GuestHeader />;
+  return <MemberHeader user={user} />;
+}
+
+function GuestHeader() {
+  const pathname = usePathname();
+  return (
+    <header className="border-b border-neutral-200 bg-neutral-0">
+      <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3">
+        <Link href="/" aria-label="songtor" className="flex flex-none items-center">
+          <BrandLogo className="h-7" />
+        </Link>
+        <div className="flex items-center gap-2 text-sm">
+          <Link
+            href={loginHref(pathname)}
+            className="rounded-[var(--radius-md)] px-3 py-2 font-medium text-primary-600 hover:bg-primary-50"
+          >
+            เข้าสู่ระบบ
+          </Link>
+          <Link
+            href={`/register?next=${encodeURIComponent(pathname)}`}
+            className="rounded-[var(--radius-md)] bg-primary-500 px-3 py-2 font-medium text-white hover:bg-primary-600"
+          >
+            สมัครสมาชิก
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function MemberHeader({ user }: { user: PublicUser }) {
   const pathname = usePathname();
   const [badges, setBadges] = useState<Badges>({
     unreadChats: 0,

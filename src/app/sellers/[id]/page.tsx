@@ -13,9 +13,11 @@ export default async function SellerProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // เปิดให้คนนอกดูได้เหมือนหน้าสินค้า — หน้าสินค้าลิงก์มาที่นี่ และรีวิวของผู้ขายคือสิ่งที่คนที่ยัง
+  // ไม่รู้จักเว็บนี้ใช้ตัดสินใจว่าจะไว้ใจพอจะสมัครสมาชิกไหม ข้อมูลที่แสดงมีแค่ชื่อ จังหวัด สถานะ
+  // ยืนยันตัวตน สินค้าที่ลงขาย และรีวิว ไม่มีอีเมล/เบอร์โทร (select ด้านล่างเลือกคอลัมน์ไว้แค่นั้น)
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  if (user.role === "admin") redirect("/admin");
+  if (user?.role === "admin") redirect("/admin");
 
   const { id } = await params;
   const { data: sellerRow } = await supabase

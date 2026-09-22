@@ -12,6 +12,7 @@ import { ProductGallery } from "@/components/ProductGallery";
 import { LocationPinIcon } from "@/components/ui/LocationPinIcon";
 import { CONDITION_LABEL } from "@/lib/categories";
 import { orderStatusBadge } from "@/lib/orderStatus";
+import { loginHref } from "@/lib/safeRedirect";
 import type { OrderStatus } from "@/types";
 
 export default async function ProductDetailPage({
@@ -19,14 +20,20 @@ export default async function ProductDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // คนที่ยังไม่ได้เข้าสู่ระบบดูหน้านี้ได้ — นี่คือหน้าที่ผู้ขายเอาลิงก์ไปแปะในกลุ่ม Facebook ถ้าคนกด
+  // เข้ามาแล้วเจอหน้าล็อกอินก่อนเห็นของ ส่วนใหญ่ปิดหน้าไปเลย การล็อกอินค่อยบังคับตอนจะแชท/ซื้อ
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  if (user.role === "admin") redirect("/admin");
+  if (user?.role === "admin") redirect("/admin");
 
   const { id } = await params;
   const { data: productRow } = await supabase.from("products").select("*").eq("id", id).maybeSingle();
   if (!productRow) notFound();
   const product = mapProduct(productRow);
+  const isOwner = user?.id === product.sellerId;
+
+  // สินค้าที่ผู้ขายถอนออกแล้วต้องไม่โผล่ให้คนอื่นเห็น — ตอนที่หน้านี้เปิดให้แค่สมาชิกก็ควรเป็นแบบนี้
+  // อยู่แล้ว แต่พอเปิดสาธารณะ ลิงก์เก่าที่ค้างอยู่ในกลุ่ม Facebook จะพาคนนอกมาเจอของที่ถอนไปแล้ว
+  if (product.status === "removed" && !isOwner) notFound();
 
   // เลือกเฉพาะคอลัมน์ที่ต้องใช้แสดงผล ไม่ดึง password_hash ขึ้นมาไว้ในหน่วยความจำเลยตั้งแต่ต้น
   const { data: seller } = await supabase
@@ -52,8 +59,13 @@ export default async function ProductDetailPage({
 
     // หน้านี้ใครเปิดก็ได้ ไม่ใช่แค่คู่ซื้อขาย — คนนอกเห็นป้ายกลางๆ ส่วนคู่ซื้อขายเห็นป้ายที่
     // บอกว่าตัวเองต้องทำอะไร และต้องมีทางไปหน้าออเดอร์ด้วย ไม่งั้นป้ายบอกให้ลงมือแต่กดไปไหนไม่ได้
-    const party =
-      orderRow?.buyer_id === user.id ? "buyer" : orderRow?.seller_id === user.id ? "seller" : undefined;
+    const party = !user
+      ? undefined
+      : orderRow?.buyer_id === user.id
+        ? "buyer"
+        : orderRow?.seller_id === user.id
+          ? "seller"
+          : undefined;
     activeOrderBadge = orderStatusBadge((orderRow?.status as OrderStatus) ?? "pending_payment", party);
     if (orderRow && party) {
       activeOrderHref = `/orders/${orderRow.id}`;
@@ -137,22 +149,43 @@ export default async function ProductDetailPage({
           )}
 
           <div className="mt-4 flex gap-3">
-            {product.sellerId !== user.id && (
-              <ChatButton productId={product.id} sellerId={product.sellerId} />
-            )}
-            {activeOrderHref ? (
-              <Link
-                href={activeOrderHref}
-                className="flex-1 rounded-[var(--radius-md)] bg-primary-500 px-5 py-3 text-center text-base font-medium text-white transition-colors hover:bg-primary-600"
-              >
-                ไปที่หน้าออเดอร์ →
-              </Link>
+            {!user ? (
+              // ปุ่มหน้าตาเหมือนของสมาชิกทุกอย่าง แค่พาไปล็อกอินก่อนแล้วส่งกลับมาที่ที่ตั้งใจจะไป —
+              // แชทพากลับไปห้องแชทเลย ส่วนซื้อพากลับมาหน้านี้ ให้เห็นของอีกรอบก่อนกดยืนยันซื้อจริง
+              <>
+                <Link
+                  href={loginHref(`/chat/${product.id}`)}
+                  className="flex-1 rounded-[var(--radius-md)] border border-neutral-200 bg-neutral-0 px-5 py-3 text-center text-base font-medium text-primary-600 transition-colors hover:bg-neutral-50"
+                >
+                  แชทกับผู้ขาย
+                </Link>
+                {product.status === "listed" && (
+                  <Link
+                    href={loginHref(`/products/${product.id}`)}
+                    className="flex-1 rounded-[var(--radius-md)] bg-primary-500 px-5 py-3 text-center text-base font-medium text-white transition-colors hover:bg-primary-600"
+                  >
+                    เข้าสู่ระบบเพื่อสั่งซื้อ
+                  </Link>
+                )}
+              </>
             ) : (
-              <BuyButton
-                productId={product.id}
-                disabled={product.status !== "listed" || product.sellerId === user.id}
-                isOwner={product.sellerId === user.id}
-              />
+              <>
+                {!isOwner && <ChatButton productId={product.id} sellerId={product.sellerId} />}
+                {activeOrderHref ? (
+                  <Link
+                    href={activeOrderHref}
+                    className="flex-1 rounded-[var(--radius-md)] bg-primary-500 px-5 py-3 text-center text-base font-medium text-white transition-colors hover:bg-primary-600"
+                  >
+                    ไปที่หน้าออเดอร์ →
+                  </Link>
+                ) : (
+                  <BuyButton
+                    productId={product.id}
+                    disabled={product.status !== "listed" || isOwner}
+                    isOwner={isOwner}
+                  />
+                )}
+              </>
             )}
           </div>
         </div>
