@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { supabase } from "@/lib/supabase";
 import { mapUser } from "@/lib/mappers";
-import { createSession, toPublicUser } from "@/lib/auth";
+import { createAuthUser, deleteAuthUser, signIn } from "@/lib/supabaseAuth";
 import { PROVINCES, type Province } from "@/lib/provinces";
 import { logAction } from "@/lib/auditLog";
 
@@ -37,13 +36,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "อีเมลนี้ถูกใช้งานแล้ว" }, { status: 409 });
   }
 
-  const passwordHash = bcrypt.hashSync(password, 10);
+  // สร้างสองที่: บัญชี + รหัสผ่านใน Supabase Auth แล้วโปรไฟล์ใน public.users ด้วย id เดียวกัน
+  const created = await createAuthUser(email, password);
+  if ("error" in created) {
+    if (created.error === "exists") {
+      return NextResponse.json({ error: "อีเมลนี้ถูกใช้งานแล้ว" }, { status: 409 });
+    }
+    if (created.error === "weak_password") {
+      return NextResponse.json({ error: "รหัสผ่านนี้คาดเดาง่ายเกินไป กรุณาตั้งใหม่" }, { status: 400 });
+    }
+    return NextResponse.json({ error: "สมัครสมาชิกไม่สำเร็จ" }, { status: 500 });
+  }
+
   const { data: row, error } = await supabase
     .from("users")
     .insert({
+      id: created.userId,
       name,
       email,
-      password_hash: passwordHash,
       province,
       role: "user",
       is_verified: false,
@@ -51,11 +61,16 @@ export async function POST(req: Request) {
     .select()
     .single();
   if (error || !row) {
+    // สองขั้นนี้ไม่ได้อยู่ใน transaction เดียวกัน ถ้าบันทึกโปรไฟล์พังต้องลบบัญชีใน Auth ทิ้งด้วย
+    // ไม่งั้นอีเมลนี้จะติดอยู่ใน Auth ตลอดไป สมัครใหม่ก็ไม่ได้ (อีเมลซ้ำ) ล็อกอินก็ไม่ได้ (ไม่มีโปรไฟล์)
+    await deleteAuthUser(created.userId);
     return NextResponse.json({ error: "สมัครสมาชิกไม่สำเร็จ" }, { status: 500 });
   }
 
+  // สมัครเสร็จแล้วล็อกอินให้เลยเหมือนเดิม — ถ้าล็อกอินพลาด บัญชียังใช้ได้ ให้ไปล็อกอินเองทีหลัง
+  await signIn(email, password);
+
   const user = mapUser(row);
-  await createSession(user.id);
   await logAction({
     actorId: user.id,
     actorRole: user.role,
@@ -65,5 +80,5 @@ export async function POST(req: Request) {
     targetId: user.id,
     metadata: { name: user.name, province: user.province },
   });
-  return NextResponse.json({ user: toPublicUser(user) }, { status: 201 });
+  return NextResponse.json({ user }, { status: 201 });
 }

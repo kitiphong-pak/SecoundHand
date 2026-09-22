@@ -1,24 +1,35 @@
-import bcrypt from "bcryptjs";
 import { supabase } from "../src/lib/supabase";
 
 // สคริปต์ seed ข้อมูลตั้งต้นลง Supabase — รันครั้งเดียวหลังรัน migration เสร็จ (ห้ามรันใส่ PRD)
-// ใช้: npx tsx scripts/seed.ts
+// ใช้: npm run seed
+
+const SEED_PASSWORD = "password123";
+
+const SEED_USERS = [
+  { name: "อดิศักดิ์ ใจดี", email: "adisak@example.com", province: "เชียงใหม่", role: "user", is_verified: true },
+  { name: "พิมพ์ชนก แสงทอง", email: "pimchanok@example.com", province: "เชียงใหม่", role: "user", is_verified: true },
+  { name: "ธนกร ศรีสุข", email: "thanakorn@example.com", province: "กรุงเทพมหานคร", role: "user", is_verified: false },
+  { name: "วรรณา ทองคำ", email: "wanna@example.com", province: "กรุงเทพมหานคร", role: "user", is_verified: true },
+  { name: "ณัฐพล ชัยมงคล", email: "nattapol@example.com", province: "ขอนแก่น", role: "user", is_verified: false },
+  { name: "สุพัตรา บุญมี", email: "supattra@example.com", province: "ภูเก็ต", role: "user", is_verified: true },
+  { name: "แอดมิน ระบบ", email: "admin@secoundhand.demo", province: "กรุงเทพมหานคร", role: "admin", is_verified: true },
+];
 
 async function main() {
-  const passwordHash = bcrypt.hashSync("password123", 10);
+  // สร้างบัญชีใน Supabase Auth ก่อน แล้วเอา id ที่ได้ไปเป็น id ของโปรไฟล์ — ทำทีละคนตามลำดับ
+  // เพราะโค้ดข้างล่างอ้างผู้ใช้ตามตำแหน่งใน array (u1, u2, ...)
+  const rows = [];
+  for (const u of SEED_USERS) {
+    const { data, error } = await supabase.auth.admin.createUser({
+      email: u.email,
+      password: SEED_PASSWORD,
+      email_confirm: true,
+    });
+    if (error || !data.user) throw error ?? new Error(`สร้างบัญชี ${u.email} ใน Auth ไม่สำเร็จ`);
+    rows.push({ ...u, id: data.user.id });
+  }
 
-  const { data: users, error: userErr } = await supabase
-    .from("users")
-    .insert([
-      { name: "อดิศักดิ์ ใจดี", email: "adisak@example.com", password_hash: passwordHash, province: "เชียงใหม่", role: "user", is_verified: true },
-      { name: "พิมพ์ชนก แสงทอง", email: "pimchanok@example.com", password_hash: passwordHash, province: "เชียงใหม่", role: "user", is_verified: true },
-      { name: "ธนกร ศรีสุข", email: "thanakorn@example.com", password_hash: passwordHash, province: "กรุงเทพมหานคร", role: "user", is_verified: false },
-      { name: "วรรณา ทองคำ", email: "wanna@example.com", password_hash: passwordHash, province: "กรุงเทพมหานคร", role: "user", is_verified: true },
-      { name: "ณัฐพล ชัยมงคล", email: "nattapol@example.com", password_hash: passwordHash, province: "ขอนแก่น", role: "user", is_verified: false },
-      { name: "สุพัตรา บุญมี", email: "supattra@example.com", password_hash: passwordHash, province: "ภูเก็ต", role: "user", is_verified: true },
-      { name: "แอดมิน ระบบ", email: "admin@secoundhand.demo", password_hash: passwordHash, province: "กรุงเทพมหานคร", role: "admin", is_verified: true },
-    ])
-    .select();
+  const { data: users, error: userErr } = await supabase.from("users").insert(rows).select();
 
   if (userErr || !users) throw userErr;
   console.log(`inserted ${users.length} users`);

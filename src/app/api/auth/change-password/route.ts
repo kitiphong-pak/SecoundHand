@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { getCurrentUser } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { setPassword, verifyPassword } from "@/lib/supabaseAuth";
 import { logAction } from "@/lib/auditLog";
 
 export async function POST(req: Request) {
@@ -19,21 +18,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร" }, { status: 400 });
   }
 
-  const { data: row } = await supabase
-    .from("users")
-    .select("password_hash")
-    .eq("id", user.id)
-    .single();
-  if (!row || !bcrypt.compareSync(currentPassword, row.password_hash)) {
+  // ต้องยืนยันรหัสเดิมก่อนเสมอ แม้จะล็อกอินอยู่แล้ว — ถ้าใครหยิบเครื่องที่ล็อกอินค้างไว้ไปได้
+  // จะได้เปลี่ยนรหัสผ่านยึดบัญชีไปไม่ได้
+  if (!(await verifyPassword(user.email, currentPassword))) {
     return NextResponse.json({ error: "รหัสผ่านปัจจุบันไม่ถูกต้อง" }, { status: 401 });
   }
 
-  const newHash = bcrypt.hashSync(newPassword, 10);
-  const { error } = await supabase
-    .from("users")
-    .update({ password_hash: newHash })
-    .eq("id", user.id);
-  if (error) return NextResponse.json({ error: "เปลี่ยนรหัสผ่านไม่สำเร็จ" }, { status: 500 });
+  if (!(await setPassword(user.id, newPassword))) {
+    return NextResponse.json({ error: "เปลี่ยนรหัสผ่านไม่สำเร็จ" }, { status: 500 });
+  }
 
   await logAction({
     actorId: user.id,

@@ -19,7 +19,6 @@ describe("mapUser", () => {
       id: "u1",
       name: "พิมพ์ชนก แสงทอง",
       email: "pim@example.com",
-      passwordHash: "hash",
       province: "เชียงใหม่",
       role: "user",
       avatarUrl: "https://example.com/avatar.png",
@@ -27,6 +26,13 @@ describe("mapUser", () => {
       isSuspended: false,
       createdAt: "2026-01-01T00:00:00Z",
     });
+  });
+
+  // รหัสผ่านย้ายไปอยู่ใน Supabase Auth แล้ว แต่ผู้ใช้เดิมยังมี password_hash ค้างในตารางจนกว่าจะย้ายครบ
+  // ถ้า mapper พา hash ติดมาด้วย มันจะไหลไปถึง props ของ client component ได้ (เคยเกิดจริงกับ Header)
+  it("ไม่พา password_hash ติดออกมา แม้ row จะยังมีคอลัมน์นี้อยู่", () => {
+    const user = mapUser({ id: "u1", email: "x@example.com", password_hash: "$2b$10$secret" });
+    expect(JSON.stringify(user)).not.toContain("$2b$10$");
   });
 
   it("avatar_url เป็น null ต้องแปลงเป็น undefined ไม่ใช่ null (ให้ตรงกับ type ที่เป็น optional)", () => {

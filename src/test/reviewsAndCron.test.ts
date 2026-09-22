@@ -17,8 +17,8 @@ vi.mock("@/lib/supabase", () => ({
 }));
 vi.mock("@/lib/auth", () => ({
   getCurrentUser: async () => mockUser.current,
-  destroySession: async () => {},
 }));
+vi.mock("@/lib/supabaseAuth", () => ({ signOut: async () => {} }));
 vi.mock("@/lib/auditLog", () => ({ logAction: async () => {} }));
 vi.mock("@/lib/orderTimeoutSweep", () => ({ processOrderTimeouts: () => sweepMock.current() }));
 

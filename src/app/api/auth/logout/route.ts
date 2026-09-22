@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { destroySession } from "@/lib/auth";
+import { signOut } from "@/lib/supabaseAuth";
 
 export async function POST() {
-  await destroySession();
+  await signOut();
   return NextResponse.json({ ok: true });
 }

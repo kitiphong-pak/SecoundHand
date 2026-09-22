@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { supabase } from "@/lib/supabase";
 import { mapUser } from "@/lib/mappers";
-import { createSession, toPublicUser } from "@/lib/auth";
+import { signIn, signOut } from "@/lib/supabaseAuth";
 import { SYSTEM_USER_ID } from "@/lib/systemUser";
+
+const INVALID = { error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" };
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
@@ -14,20 +15,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "กรุณากรอกอีเมลและรหัสผ่าน" }, { status: 400 });
   }
 
-  const { data: row } = await supabase.from("users").select("*").eq("email", email).maybeSingle();
-  // บัญชีระบบไม่ใช่คน จึงไม่ควรมีใครล็อกอินเข้ามาได้เลย — ปฏิเสธที่ชั้นนี้ตรงๆ ไม่ฝากความ
-  // ปลอดภัยไว้กับการที่ไม่มีใครรู้รหัสผ่านของมัน เพราะ password_hash ตัวนั้นอยู่ในไฟล์
-  // migration ที่เปิดเผยบน GitHub ถ้าวันหนึ่งมีคนแครกได้ก็จะได้สิทธิ์แอดมินบนระบบจริงทันที
-  // ใช้ข้อความ error เดียวกับกรณีรหัสผ่านผิด จะได้ไม่บอกใบ้ว่าอีเมลนี้มีอยู่จริงและพิเศษ
-  if (!row || row.id === SYSTEM_USER_ID || !bcrypt.compareSync(password, row.password_hash)) {
-    return NextResponse.json({ error: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" }, { status: 401 });
-  }
-  // เช็คหลังยืนยันรหัสผ่านถูกแล้วเท่านั้น กันเดารหัสผ่านจากข้อความ error ที่ต่างกัน
-  if (row.is_suspended) {
-    return NextResponse.json({ error: "บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ" }, { status: 403 });
+  // Supabase ตรวจรหัสผ่านและจำกัดจำนวนครั้งที่ลองผิดให้เอง — เดิมเราเทียบ bcrypt เองและไม่มีการ
+  // จำกัดเลย ใครจะเดารหัสผ่านวนไปเรื่อยๆ ก็ได้
+  const result = await signIn(email, password);
+  if ("error" in result) {
+    if (result.error === "rate_limited") {
+      return NextResponse.json(
+        { error: "ลองเข้าสู่ระบบบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่" },
+        { status: 429 }
+      );
+    }
+    return NextResponse.json(INVALID, { status: 401 });
   }
 
-  const user = mapUser(row);
-  await createSession(user.id);
-  return NextResponse.json({ user: toPublicUser(user) });
+  // บัญชีระบบไม่ใช่คน ไม่ควรมีใครล็อกอินเข้ามาได้เลย — ตอนนี้บัญชีนี้ไม่มีตัวตนใน Supabase Auth จึง
+  // ล็อกอินไม่ได้อยู่แล้ว แต่กันไว้อีกชั้น ใช้ข้อความเดียวกับรหัสผ่านผิดเพื่อไม่บอกใบ้ว่ามีบัญชีพิเศษ
+  if (result.userId === SYSTEM_USER_ID) {
+    await signOut();
+    return NextResponse.json(INVALID, { status: 401 });
+  }
+
+  const { data: row } = await supabase.from("users").select("*").eq("id", result.userId).maybeSingle();
+  if (!row) {
+    await signOut();
+    return NextResponse.json(INVALID, { status: 401 });
+  }
+  // เช็คหลังยืนยันรหัสผ่านถูกแล้วเท่านั้น กันเดารหัสผ่านจากข้อความ error ที่ต่างกัน
+  // และต้องล็อกเอาต์ทิ้ง ไม่งั้น cookie ของ session ที่เพิ่งได้มาจะค้างอยู่ในเบราว์เซอร์
+  if (row.is_suspended) {
+    await signOut();
+    return NextResponse.json(
+      { error: "บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ" },
+      { status: 403 }
+    );
+  }
+
+  return NextResponse.json({ user: mapUser(row) });
 }

@@ -76,6 +76,17 @@ describe("ไฟล์ migration", () => {
       expect(cols).toContain(c);
     }
   });
+
+  // migration 018: รหัสผ่านย้ายไปอยู่ใน Supabase Auth ผู้ใช้ที่สมัครใหม่จึงไม่มี hash ในตารางนี้
+  // ถ้าคอลัมน์ยังเป็น not null อยู่ การสมัครสมาชิกจะพังทุกครั้งตอนบันทึกโปรไฟล์
+  it("สร้างผู้ใช้ได้โดยไม่มี password_hash (migration 018)", async () => {
+    await db.truncateAll();
+    await expect(
+      q(
+        `insert into users (id, name, email, province) values (gen_random_uuid(), 'ผู้ใช้ใหม่', 'new@x.com', 'เชียงใหม่')`
+      )
+    ).resolves.toBeDefined();
+  });
 });
 
 describe("index กันขายสินค้าชิ้นเดียวซ้ำ (migration 008)", () => {

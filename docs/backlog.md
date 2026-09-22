@@ -2,41 +2,13 @@
 
 งานที่ตกลงกันแล้วว่าจะทำ แต่ยังไม่ได้เริ่ม เรียงตามลำดับที่ตั้งใจทำ
 
-## ย้าย auth ที่เขียนเองไปใช้ Supabase Auth
+## เก็บงานหลังย้ายไป Supabase Auth
 
-**ทำไม**
+ย้ายไปแล้วใน branch `feature/supabase-auth` (migration 018, [src/lib/supabaseAuth.ts](../src/lib/supabaseAuth.ts), [src/proxy.ts](../src/proxy.ts)) ที่เหลือคือ:
 
-auth ตอนนี้เขียนเองทั้งหมด ([src/lib/auth.ts](../src/lib/auth.ts)) ประกอบด้วยตาราง `sessions`, cookie `session_token` และ bcrypt ส่วน `supabase.auth` ไม่ได้ใช้เลยสักจุด ทั้งที่ Supabase มีให้อยู่แล้ว
-
-ช่องโหว่ที่เจอตอนไล่โค้ด:
-
-- **session ไม่มีวันหมดอายุฝั่งเซิร์ฟเวอร์** อายุ 30 วันมีแค่ `maxAge` ของ cookie ซึ่งคนถือ cookie กำหนดเองได้ `getCurrentUser()` ไม่เคยเช็ค `sessions.created_at` ถ้า token หลุดไปครั้งเดียว ใช้ได้ตลอดไปจนกว่าจะ logout
-- **เก็บ token แบบข้อความตรงๆ ในตาราง `sessions`** ถ้าฐานข้อมูลหลุด ทุก session ที่ยังเปิดอยู่ถูกสวมรอยได้ทันที
-- **ยังไม่มีระบบลืมรหัสผ่าน ยืนยันอีเมล และจำกัดจำนวนครั้งที่ล็อกอินผิด**
-
-**จะได้อะไร**
-
-- session หมดอายุจริง และ refresh token หมุนเวียนให้เอง
-- ลืมรหัสผ่านและยืนยันอีเมลแบบมีให้ใช้เลย
-- ยืนยันเบอร์โทรด้วย OTP ซึ่ง Phase 2 ของ flow ใหม่ต้องใช้ ส่วนค่า SMS ยังต้องจ่ายผู้ให้บริการ SMS เอง
-- rate limit ตอนล็อกอิน
-- เพิ่ม social login ทีหลังได้ง่ายขึ้น
-
-**ต้องแตะอะไรบ้าง**
-
-- ติดตั้ง `@supabase/ssr` เพื่อให้ session ของ Supabase อยู่ใน cookie ฝั่ง Next.js ได้ ต้องอ่าน `node_modules/next/dist/docs/` ก่อนเรื่อง cookies/proxy ใน Next 16
-- ผูก `public.users` เข้ากับ `auth.users` ด้วย id เดียวกัน หรือเพิ่มคอลัมน์ `auth_user_id`
-- เขียน `getCurrentUser()` ใหม่ ตอนนี้มี 47 ไฟล์ที่เรียกใช้ แต่ถ้าหน้าตาฟังก์ชันเหมือนเดิม ไฟล์พวกนั้นไม่ต้องแก้ ส่วนเทสต์ route ส่วนใหญ่ mock `getCurrentUser` ไว้อยู่แล้ว จึงไม่น่าพังเยอะ
-- route ใน `src/app/api/auth/` ได้แก่ login, register, logout, change-password, me, profile
-- เก็บการระงับบัญชี (`is_suspended`) ไว้ให้ทำงานเหมือนเดิม ตอนนี้โดนระงับแล้วจะเตะออกทันที
-- system actor ([007](../supabase/migrations/007_system_actor.sql)) กับ role แอดมิน
-- `scripts/seed.ts` ต้องสร้างผู้ใช้ผ่าน Supabase Auth แทน
-- ย้ายผู้ใช้เดิมใน UAT ซึ่งเป็น hash แบบ bcrypt เหมือนที่ Supabase ใช้ อาจนำเข้าได้โดยไม่ต้องให้ทุกคนตั้งรหัสใหม่ **ต้องเช็คเอกสาร Supabase ก่อน ยังไม่ได้ยืนยัน**
-- ลบตาราง `sessions` กับคอลัมน์ `password_hash` หลังย้ายเสร็จแล้วเท่านั้น
-
-**ควรทำเมื่อไหร่**
-
-ก่อน deploy ให้คนจริงใช้ ย้ายตอนที่มีแต่ข้อมูลทดสอบง่ายกว่าย้ายตอนมีผู้ใช้จริงมาก
+- **ลบตาราง `sessions` กับคอลัมน์ `users.password_hash`** ทำเป็น migration ใหม่ หลังรัน `npm run auth:migrate-users:apply` กับ UAT ครบ และลองล็อกอินด้วยบัญชีเดิมผ่านแล้วเท่านั้น
+- **ลืมรหัสผ่าน / ยืนยันอีเมล** Supabase มีให้แล้ว แต่ SMTP ตั้งต้นของ Supabase ส่งได้เฉพาะอีเมลของสมาชิกทีมโปรเจกต์ ต้องตั้ง SMTP ของตัวเองก่อน (เช่น Resend หรือ SES) ตอนนี้สมัครผ่าน `admin.createUser` แบบถือว่ายืนยันอีเมลแล้ว เหมือนระบบเดิมที่ไม่มีการยืนยัน
+- **PRD** ตอนปลุก PRD ต้องรัน `migrate:prd` ให้ถึง 018 ด้วย PRD ยังไม่มีผู้ใช้ จึงไม่ต้องรันสคริปต์ย้าย
 
 ## Flow ออเดอร์ใหม่ (ไม่ผ่านเงิน ไม่มี OTP)
 
@@ -53,4 +25,6 @@ auth ตอนนี้เขียนเองทั้งหมด ([src/lib/a
 - มี privacy policy และ ToS รวมถึงนโยบายเก็บ/ลบข้อมูลสถานที่และเวลานัดตาม PDPA
 - มีคำเตือนความปลอดภัยตอนนัดเจอ
 - ปลุก PRD แล้วรัน `npm run migrate:prd`
+- ตั้ง env บน Vercel ให้ครบ 4 ตัว รวม `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` ที่เพิ่มมาตอนย้าย auth
+- ตอนสร้างโปรเจกต์บน Vercel ต้องตั้ง Production Branch เป็น `main` เอง
 - **ห้ามรัน `npm run seed` กับ PRD** เพราะจะสร้างบัญชีที่ใช้รหัส `password123` รวมถึงบัญชีแอดมินด้วย

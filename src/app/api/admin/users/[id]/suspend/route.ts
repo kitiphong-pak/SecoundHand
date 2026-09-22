@@ -30,11 +30,8 @@ export async function POST(
   const { error } = await supabase.from("users").update({ is_suspended: suspended }).eq("id", id);
   if (error) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
 
-  // ระงับแล้วเลิก session ทั้งหมดของ user คนนี้ทันที ไม่ต้องรอให้ getCurrentUser() ครั้งถัดไป
-  // ของเขามาเช็คเจอเอง (เผื่อเขากำลังใช้งานหน้าที่ไม่ยิง request ใหม่ไปอีกพักใหญ่)
-  if (suspended) {
-    await supabase.from("sessions").delete().eq("user_id", id);
-  }
+  // ไม่ต้องไปตามลบ session ของเขา — getCurrentUser() เช็ค is_suspended จากฐานข้อมูลทุก request
+  // ระงับปุ๊บ request ถัดไปของเขาก็ถูกมองว่าไม่ได้ล็อกอินทันที ต่อให้ token ยังไม่หมดอายุ
 
   await logAction({
     actorId: admin.id,

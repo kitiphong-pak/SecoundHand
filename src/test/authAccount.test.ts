@@ -2,12 +2,24 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createSupabaseMock, hasOp } from "@/test/supabaseMock";
 
 // route ที่แตะบัญชีและรหัสผ่าน — สมัคร เปลี่ยนรหัสผ่าน แก้โปรไฟล์
-// สิ่งที่ต้องกันคือ: hash หลุดออกไปกับ response, แก้บัญชีคนอื่นได้, และรับค่าที่ไม่ควรรับ
-// (จังหวัดที่ไม่มีจริง, รูปโปรไฟล์ที่ชี้ไปโดเมนอื่น, รหัสผ่านสั้นเกินไป)
-const { mock, mockUser, bcryptOk } = vi.hoisted(() => ({
+// รหัสผ่านย้ายไปอยู่ที่ Supabase Auth แล้ว (mock ทั้งชั้น supabaseAuth ไว้) สิ่งที่ต้องกันยังเหมือนเดิม:
+// รหัสผ่านต้องไม่ตกมาอยู่ในตารางของเรา, แก้บัญชีคนอื่นไม่ได้, ไม่รับค่าที่ไม่ควรรับ — และข้อใหม่:
+// สมัครพังกลางทางต้องไม่ทิ้งบัญชีค้างไว้ใน Supabase Auth
+const { mock, mockUser, auth } = vi.hoisted(() => ({
   mock: { current: null as ReturnType<typeof import("@/test/supabaseMock").createSupabaseMock> | null },
-  mockUser: { current: null as { id: string; role: string; name: string } | null },
-  bcryptOk: { current: true },
+  mockUser: { current: null as { id: string; role: string; name: string; email: string } | null },
+  auth: {
+    createResult: { userId: "new-user-1" } as
+      | { userId: string }
+      | { error: "exists" | "weak_password" | "failed" },
+    created: [] as Array<{ email: string; password: string }>,
+    deleted: [] as string[],
+    signedIn: [] as string[],
+    verifyOk: true,
+    verified: [] as Array<{ email: string; password: string }>,
+    setOk: true,
+    setCalls: [] as Array<{ id: string; password: string }>,
+  },
 }));
 
 vi.mock("@/lib/supabase", () => ({
@@ -15,33 +27,41 @@ vi.mock("@/lib/supabase", () => ({
     return mock.current!.supabase;
   },
 }));
-vi.mock("bcryptjs", () => ({
-  default: {
-    compareSync: () => bcryptOk.current,
-    hashSync: (pw: string) => `hashed:${pw}`,
+vi.mock("@/lib/supabaseAuth", () => ({
+  createAuthUser: async (email: string, password: string) => {
+    auth.created.push({ email, password });
+    return auth.createResult;
+  },
+  deleteAuthUser: async (id: string) => {
+    auth.deleted.push(id);
+  },
+  signIn: async (email: string) => {
+    auth.signedIn.push(email);
+    return { userId: "new-user-1" };
+  },
+  verifyPassword: async (email: string, password: string) => {
+    auth.verified.push({ email, password });
+    return auth.verifyOk;
+  },
+  setPassword: async (id: string, password: string) => {
+    auth.setCalls.push({ id, password });
+    return auth.setOk;
   },
 }));
 vi.mock("@/lib/auditLog", () => ({ logAction: async () => {} }));
-vi.mock("@/lib/auth", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/auth")>("@/lib/auth");
-  return {
-    toPublicUser: actual.toPublicUser,
-    getCurrentUser: async () => mockUser.current,
-    createSession: async () => {},
-  };
-});
+vi.mock("@/lib/auth", () => ({ getCurrentUser: async () => mockUser.current }));
 
 const { POST: register } = await import("@/app/api/auth/register/route");
 const { POST: changePassword } = await import("@/app/api/auth/change-password/route");
 const { PATCH: updateProfile } = await import("@/app/api/auth/profile/route");
 
-const USER = { id: "user-1", role: "user", name: "ผู้ใช้" };
+const USER = { id: "user-1", role: "user", name: "ผู้ใช้", email: "user@example.com" };
 
 const userRow = (over: Record<string, unknown> = {}) => ({
   id: "user-1",
   name: "ผู้ใช้",
   email: "user@example.com",
-  password_hash: "$2b$10$existinghash",
+  password_hash: null,
   province: "เชียงใหม่",
   role: "user",
   avatar_url: null,
@@ -58,13 +78,20 @@ const send = (body: unknown, method = "POST") =>
     body: JSON.stringify(body),
   });
 
-const updateOf = (call: { ops: Array<[string, ...unknown[]]> }) =>
-  call.ops.find(([m]) => m === "update")?.[1] as Record<string, unknown>;
+const insertOf = (call: { ops: Array<[string, ...unknown[]]> }) =>
+  call.ops.find(([m]) => m === "insert")?.[1] as Record<string, unknown>;
 
 beforeEach(() => {
   mock.current = createSupabaseMock();
   mockUser.current = USER;
-  bcryptOk.current = true;
+  auth.createResult = { userId: "new-user-1" };
+  auth.created = [];
+  auth.deleted = [];
+  auth.signedIn = [];
+  auth.verifyOk = true;
+  auth.verified = [];
+  auth.setOk = true;
+  auth.setCalls = [];
 });
 
 describe("สมัครสมาชิก", () => {
@@ -75,36 +102,36 @@ describe("สมัครสมาชิก", () => {
     province: "เชียงใหม่",
   };
 
-  it("สมัครสำเร็จ และไม่คืน password hash กลับไป", async () => {
+  it("สมัครสำเร็จ: สร้างบัญชีใน Auth แล้วสร้างโปรไฟล์ด้วย id เดียวกัน และล็อกอินให้เลย", async () => {
     mock.current!.queueResult({ data: null, error: null }); // ยังไม่มีอีเมลนี้
-    mock.current!.queueResult({ data: userRow(), error: null });
+    mock.current!.queueResult({ data: userRow({ id: "new-user-1" }), error: null });
 
     const res = await register(send(good));
     expect(res.status).toBe(201);
-    const body = await res.json();
-    expect(JSON.stringify(body)).not.toContain("$2b$10$");
-    expect(body.user.passwordHash).toBeUndefined();
+    expect(auth.created).toHaveLength(1);
+    expect(insertOf(mock.current!.callsTo("users")[1]).id).toBe("new-user-1");
+    expect(auth.signedIn).toEqual(["somchai@example.com"]);
   });
 
-  it("เก็บอีเมลเป็นตัวพิมพ์เล็กเสมอ ไม่งั้นจะสมัครซ้ำด้วยตัวพิมพ์ใหญ่ได้", async () => {
+  it("เก็บอีเมลเป็นตัวพิมพ์เล็กเสมอ ทั้งใน Auth และในโปรไฟล์", async () => {
     mock.current!.queueResult({ data: null, error: null });
     mock.current!.queueResult({ data: userRow(), error: null });
 
     await register(send(good));
-    const insert = mock.current!.callsTo("users")[1];
-    const payload = insert.ops.find(([m]) => m === "insert")?.[1] as Record<string, unknown>;
-    expect(payload.email).toBe("somchai@example.com");
+    expect(auth.created[0].email).toBe("somchai@example.com");
+    expect(insertOf(mock.current!.callsTo("users")[1]).email).toBe("somchai@example.com");
   });
 
-  it("ไม่เก็บรหัสผ่านเป็น plain text", async () => {
+  // รหัสผ่านต้องไปอยู่ที่ Supabase Auth ที่เดียว — ตารางของเราไม่ควรเห็นมันเลยสักรูปแบบ
+  it("ไม่ส่งรหัสผ่านลงตาราง users ของเราเลย ทั้งแบบ plain text และแบบ hash", async () => {
     mock.current!.queueResult({ data: null, error: null });
     mock.current!.queueResult({ data: userRow(), error: null });
 
     await register(send(good));
-    const insert = mock.current!.callsTo("users")[1];
-    const payload = insert.ops.find(([m]) => m === "insert")?.[1] as Record<string, unknown>;
-    expect(payload.password_hash).not.toBe("password123");
-    expect(String(payload.password_hash)).toContain("hashed:");
+    const payload = insertOf(mock.current!.callsTo("users")[1]);
+    expect(payload).not.toHaveProperty("password");
+    expect(payload).not.toHaveProperty("password_hash");
+    expect(JSON.stringify(payload)).not.toContain("password123");
   });
 
   it("สมัครเองเป็นแอดมินไม่ได้ แม้จะยัด role มาใน body", async () => {
@@ -112,20 +139,46 @@ describe("สมัครสมาชิก", () => {
     mock.current!.queueResult({ data: userRow(), error: null });
 
     await register(send({ ...good, role: "admin", is_verified: true }));
-    const insert = mock.current!.callsTo("users")[1];
-    const payload = insert.ops.find(([m]) => m === "insert")?.[1] as Record<string, unknown>;
+    const payload = insertOf(mock.current!.callsTo("users")[1]);
     expect(payload.role).toBe("user");
     expect(payload.is_verified).toBe(false);
   });
 
-  it("อีเมลซ้ำ → 409 และไม่สร้างบัญชี", async () => {
+  it("อีเมลซ้ำในโปรไฟล์ → 409 และไม่สร้างบัญชีใน Auth", async () => {
     mock.current!.queueResult({ data: { id: "existing" }, error: null });
+    const res = await register(send(good));
+    expect(res.status).toBe(409);
+    expect(auth.created).toHaveLength(0);
+  });
+
+  it("อีเมลซ้ำใน Auth (มีบัญชีแต่ไม่มีโปรไฟล์) → 409 และไม่สร้างโปรไฟล์", async () => {
+    mock.current!.queueResult({ data: null, error: null });
+    auth.createResult = { error: "exists" };
     const res = await register(send(good));
     expect(res.status).toBe(409);
     expect(mock.current!.callsTo("users")).toHaveLength(1);
   });
 
-  it("ข้อมูลไม่ผ่านเกณฑ์ → 400 ก่อนแตะฐานข้อมูล", async () => {
+  it("Supabase บอกว่ารหัสผ่านอ่อนเกินไป → 400 ไม่ใช่บอกว่าอีเมลซ้ำ", async () => {
+    mock.current!.queueResult({ data: null, error: null });
+    auth.createResult = { error: "weak_password" };
+    const res = await register(send(good));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).not.toContain("อีเมล");
+  });
+
+  // ถ้าไม่ลบทิ้ง อีเมลนี้จะติดอยู่ใน Auth ถาวร: สมัครใหม่ก็ไม่ได้เพราะซ้ำ ล็อกอินก็ไม่ได้เพราะไม่มีโปรไฟล์
+  it("สร้างโปรไฟล์พัง → ลบบัญชีที่เพิ่งสร้างใน Auth ทิ้ง และไม่ล็อกอินให้", async () => {
+    mock.current!.queueResult({ data: null, error: null });
+    mock.current!.queueResult({ data: null, error: { message: "insert failed" } });
+
+    const res = await register(send(good));
+    expect(res.status).toBe(500);
+    expect(auth.deleted).toEqual(["new-user-1"]);
+    expect(auth.signedIn).toHaveLength(0);
+  });
+
+  it("ข้อมูลไม่ผ่านเกณฑ์ → 400 ก่อนแตะฐานข้อมูลหรือ Auth", async () => {
     const bad = [
       { ...good, email: "ไม่ใช่อีเมล" },
       { ...good, password: "12345" },
@@ -135,41 +188,49 @@ describe("สมัครสมาชิก", () => {
     ];
     for (const b of bad) expect((await register(send(b))).status).toBe(400);
     expect(mock.current!.calls).toHaveLength(0);
+    expect(auth.created).toHaveLength(0);
   });
 });
 
 describe("เปลี่ยนรหัสผ่าน", () => {
-  it("รหัสผ่านปัจจุบันถูกต้อง → เปลี่ยนได้ และเขียนเฉพาะบัญชีตัวเอง", async () => {
-    mock.current!.queueResult({ data: { password_hash: "$2b$10$existinghash" }, error: null });
-    mock.current!.queueResult({ data: null, error: null });
-
+  it("รหัสผ่านปัจจุบันถูกต้อง → ตั้งรหัสใหม่ให้บัญชีตัวเองเท่านั้น", async () => {
     const res = await changePassword(send({ currentPassword: "old123", newPassword: "newpass123" }));
     expect(res.status).toBe(200);
-
-    const update = mock.current!.callsTo("users")[1];
-    expect(hasOp(update, "eq", "id", USER.id)).toBe(true);
-    expect(String(updateOf(update).password_hash)).toContain("hashed:");
+    expect(auth.setCalls).toEqual([{ id: USER.id, password: "newpass123" }]);
   });
 
-  it("รหัสผ่านปัจจุบันผิด → 401 และต้องไม่เขียนอะไรเลย", async () => {
-    bcryptOk.current = false;
-    mock.current!.queueResult({ data: { password_hash: "$2b$10$existinghash" }, error: null });
+  // อีเมลที่ใช้เช็ครหัสเดิมต้องมาจาก session ไม่ใช่จาก body — ไม่งั้นส่งอีเมล+รหัสของบัญชีตัวเองมา
+  // เพื่อผ่านด่านนี้ แล้วไปเปลี่ยนรหัสของบัญชีที่ล็อกอินค้างไว้ได้
+  it("เช็ครหัสเดิมกับอีเมลของคนที่ล็อกอินอยู่ ไม่ใช่อีเมลที่ส่งมาใน body", async () => {
+    await changePassword(
+      send({ currentPassword: "old123", newPassword: "newpass123", email: "attacker@example.com" })
+    );
+    expect(auth.verified).toEqual([{ email: USER.email, password: "old123" }]);
+  });
 
+  it("รหัสผ่านปัจจุบันผิด → 401 และไม่ตั้งรหัสใหม่", async () => {
+    auth.verifyOk = false;
     const res = await changePassword(send({ currentPassword: "wrong", newPassword: "newpass123" }));
     expect(res.status).toBe(401);
-    expect(mock.current!.callsTo("users")).toHaveLength(1);
+    expect(auth.setCalls).toHaveLength(0);
+  });
+
+  it("ตั้งรหัสใหม่ไม่สำเร็จ → 500", async () => {
+    auth.setOk = false;
+    const res = await changePassword(send({ currentPassword: "old123", newPassword: "newpass123" }));
+    expect(res.status).toBe(500);
   });
 
   it("รหัสผ่านใหม่สั้นเกินไป → 400 ก่อนตรวจรหัสเดิมด้วยซ้ำ", async () => {
     const res = await changePassword(send({ currentPassword: "old123", newPassword: "12345" }));
     expect(res.status).toBe(400);
-    expect(mock.current!.calls).toHaveLength(0);
+    expect(auth.verified).toHaveLength(0);
   });
 
   it("ไม่ได้เข้าสู่ระบบ → 401", async () => {
     mockUser.current = null;
     expect((await changePassword(send({ currentPassword: "a", newPassword: "bbbbbb" }))).status).toBe(401);
-    expect(mock.current!.calls).toHaveLength(0);
+    expect(auth.verified).toHaveLength(0);
   });
 });
 
@@ -187,8 +248,8 @@ describe("แก้ไขโปรไฟล์", () => {
     expect(JSON.stringify(update.ops)).not.toContain("victim-9");
   });
 
-  it("ไม่คืน password hash กลับไปกับ response", async () => {
-    mock.current!.queueResult({ data: userRow(), error: null });
+  it("ไม่คืน password hash กลับไปกับ response แม้ในตารางยังค้างอยู่", async () => {
+    mock.current!.queueResult({ data: userRow({ password_hash: "$2b$10$leftover" }), error: null });
     const body = await (await updateProfile(send(good, "PATCH"))).json();
     expect(JSON.stringify(body)).not.toContain("$2b$10$");
   });
