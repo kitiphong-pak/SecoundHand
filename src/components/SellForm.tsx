@@ -9,19 +9,22 @@ import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { CATEGORIES, CONDITION_LABEL } from "@/lib/categories";
 import { fileToCompressedDataUrl } from "@/lib/image";
+import { callApi, messageOf } from "@/lib/apiResponse";
 import type { Product } from "@/types";
 
 const MAX_IMAGES = 5;
 
 async function uploadImage(dataUrl: string): Promise<string> {
-  const res = await fetch("/api/upload", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image: dataUrl }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "อัปโหลดรูปภาพไม่สำเร็จ");
-  return data.url as string;
+  const data = await callApi<{ url: string }>(
+    "/api/upload",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: dataUrl }),
+    },
+    "อัปโหลดรูปภาพไม่สำเร็จ"
+  );
+  return data.url;
 }
 
 // ใช้ทั้งหน้าลงขายใหม่และหน้าแก้ไขประกาศ — ส่ง product เข้ามาก็สลับเป็นโหมดแก้ไข (PATCH ของเดิม)
@@ -65,7 +68,7 @@ export function SellForm({ product }: { product?: Product }) {
       }
       setImages((prev) => [...prev, ...uploaded]);
     } catch (err) {
-      setImageError(err instanceof Error ? err.message : "อัปโหลดรูปภาพบางไฟล์ไม่สำเร็จ ลองใหม่อีกครั้ง");
+      setImageError(messageOf(err, "อัปโหลดรูปภาพบางไฟล์ไม่สำเร็จ ลองใหม่อีกครั้ง"));
     } finally {
       setProcessingImages(false);
     }
@@ -91,20 +94,18 @@ export function SellForm({ product }: { product?: Product }) {
     };
 
     try {
-      const res = await fetch(isEdit ? `/api/products/${product!.id}` : "/api/products", {
-        method: isEdit ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "เกิดข้อผิดพลาด กรุณาลองใหม่");
-        return;
-      }
+      const data = await callApi<{ product: { id: string } }>(
+        isEdit ? `/api/products/${product!.id}` : "/api/products",
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
       router.push(`/products/${data.product.id}`);
       router.refresh();
-    } catch {
-      setError("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ");
+    } catch (err) {
+      setError(messageOf(err));
     } finally {
       setSubmitting(false);
     }

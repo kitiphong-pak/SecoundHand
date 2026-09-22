@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { callApi, messageOf } from "@/lib/apiResponse";
 
 export function ChangePasswordForm() {
   const [error, setError] = useState("");
@@ -26,20 +27,19 @@ export function ChangePasswordForm() {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/auth/change-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "เปลี่ยนรหัสผ่านไม่สำเร็จ");
-        return;
-      }
+      await callApi(
+        "/api/auth/change-password",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        },
+        "เปลี่ยนรหัสผ่านไม่สำเร็จ"
+      );
       setSuccess(true);
       (e.target as HTMLFormElement).reset();
-    } catch {
-      setError("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ");
+    } catch (err) {
+      setError(messageOf(err, "เปลี่ยนรหัสผ่านไม่สำเร็จ"));
     } finally {
       setSubmitting(false);
     }

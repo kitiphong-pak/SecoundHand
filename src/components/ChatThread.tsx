@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ChatMessage, Offer, User } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { callApi, messageOf } from "@/lib/apiResponse";
 
 const OFFER_BADGE = {
   pending: { label: "รอตอบรับ", status: "pending" as const },
@@ -165,19 +166,20 @@ export function ChatThread({
     }
     setSending(true);
     try {
-      const res = await fetch(`/api/chat/${productId}/offer`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toUserId: otherUser.id, amount }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setOfferError(data.error ?? "เสนอราคาไม่สำเร็จ");
-        return;
-      }
+      await callApi(
+        `/api/chat/${productId}/offer`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ toUserId: otherUser.id, amount }),
+        },
+        "เสนอราคาไม่สำเร็จ"
+      );
       setOfferAmount("");
       setShowOfferForm(false);
       load();
+    } catch (err) {
+      setOfferError(messageOf(err, "เสนอราคาไม่สำเร็จ"));
     } finally {
       setSending(false);
     }
@@ -200,16 +202,14 @@ export function ChatThread({
   const onBuyWithOffer = async (offer: Offer) => {
     setBusyOfferId(offer.id);
     try {
-      const res = await fetch("/api/orders", {
+      const data = await callApi<{ order: { id: string } }>("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productId, offerId: offer.id }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        router.push(`/orders/${data.order.id}`);
-        return;
-      }
+      router.push(`/orders/${data.order.id}`);
+    } catch {
+      // พฤติกรรมเดิม: ซื้อไม่สำเร็จ (เช่นข้อเสนอถูกยกเลิกไปแล้ว) ก็แค่โหลดแชทใหม่ให้เห็นสถานะล่าสุด
       load();
     } finally {
       setBusyOfferId(null);

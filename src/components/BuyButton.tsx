@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { callApi, messageOf } from "@/lib/apiResponse";
 
 export function BuyButton({
   productId,
@@ -21,17 +22,18 @@ export function BuyButton({
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "สั่งซื้อไม่สำเร็จ");
-        return;
-      }
+      const data = await callApi<{ order: { id: string } }>(
+        "/api/orders",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId }),
+        },
+        "สั่งซื้อไม่สำเร็จ"
+      );
       router.push(`/orders/${data.order.id}`);
+    } catch (e) {
+      setError(messageOf(e, "สั่งซื้อไม่สำเร็จ"));
     } finally {
       setLoading(false);
     }

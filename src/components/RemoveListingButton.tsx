@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { callApi, messageOf } from "@/lib/apiResponse";
 
 export function RemoveListingButton({ productId }: { productId: string }) {
   const router = useRouter();
@@ -14,12 +15,10 @@ export function RemoveListingButton({ productId }: { productId: string }) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/products/${productId}/remove`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "ลบประกาศไม่สำเร็จ");
+      await callApi(`/api/products/${productId}/remove`, { method: "POST" }, "ลบประกาศไม่สำเร็จ");
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "ลบประกาศไม่สำเร็จ");
+      setError(messageOf(e, "ลบประกาศไม่สำเร็จ"));
       setLoading(false);
     }
   };

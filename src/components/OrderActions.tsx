@@ -7,16 +7,14 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Countdown } from "@/components/Countdown";
 import type { Order } from "@/types";
 import { BUYER_CONFIRM_WINDOW_MS } from "@/lib/orderTiming";
+import { callApi, messageOf } from "@/lib/apiResponse";
 
-async function call(url: string, body?: object) {
-  const res = await fetch(url, {
+function call(url: string, body?: object) {
+  return callApi(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "เกิดข้อผิดพลาด");
-  return data;
 }
 
 export function OrderActions({ order, role }: { order: Order; role: "buyer" | "seller" }) {
@@ -35,7 +33,7 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
       await fn();
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+      setError(messageOf(e));
     } finally {
       setLoading(false);
     }
