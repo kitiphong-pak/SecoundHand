@@ -428,7 +428,11 @@ export function ChatThread({
         {otherUser.name}
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 py-4" style={{ minHeight: 320, maxHeight: 480 }}>
+      {/* เว้นที่ด้านล่างไว้ให้แถบที่ลอยอยู่ (นัดแล้ว/ชิปถามเวลา) ไม่บังข้อความล่าสุดตอนเลื่อนสุด */}
+      <div
+        className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 pt-4 pb-12"
+        style={{ minHeight: 320, maxHeight: 480 }}
+      >
         {messages.length === 0 ? (
           <p className="mt-8 text-center text-sm text-neutral-400">เริ่มทักทายกันได้เลย</p>
         ) : (
@@ -476,17 +480,30 @@ export function ChatThread({
         <div ref={bottomRef} />
       </div>
 
-      {/* ของชั่วคราว (ชิปถามเวลา, ฟอร์มนัด, ฟอร์มเสนอราคา) ลอยทับกล่องแชทแทนที่จะต่อท้ายให้กล่อง
-          สูงขึ้น — ไม่งั้นทุกครั้งที่เปิด ข้อความในแชทจะถูกดันหายไปจากสายตาและหน้าทั้งหน้าจะกระโดด
-          ยึดที่ bottom-full ของกล่องนี้ ของที่ลอยจึงอยู่เหนือขอบบนของกล่องนี้พอดีเสมอ
-          ของที่อยู่ในสายเลย์เอาต์ปกติ (แถบ "นัดแล้ว", ข้อความ error, ช่องพิมพ์) ต้องอยู่ "ข้างใน"
-          กล่องนี้ด้วย ไม่งั้นของที่ลอยจะไปทับมันแทนที่จะอยู่เหนือมัน */}
+      {/* ทุกอย่างที่อยู่เหนือช่องพิมพ์ลอยทับกล่องแชท ไม่ต่อท้ายให้กล่องสูงขึ้น — ไม่งั้นทุกครั้งที่มี
+          อะไรโผล่มา ข้อความในแชทจะถูกดันหายไปจากสายตาและหน้าทั้งหน้าจะกระโดด
+          ยึดที่ bottom-full ของกล่องนี้ ของที่ลอยจึงอยู่เหนือช่องพิมพ์พอดีเสมอ
+          แถบ "นัดแล้ว" ลอยไปกองอยู่ในชั้นเดียวกับชิปด้วย เพราะถ้าปล่อยไว้ในสายเลย์เอาต์ปกติ ชิปที่
+          ลอยอยู่จะไปทับมัน — ลำดับที่เห็นจึงเป็น [นัดแล้ว] แล้วค่อย [ชิปถามเวลา] แล้วถึงช่องพิมพ์ */}
       <div className="relative">
+      <div className="absolute inset-x-0 bottom-full z-10 flex flex-col overflow-hidden rounded-t-[var(--radius-lg)] shadow-[0_-8px_24px_rgba(0,0,0,0.12)]">
+        {/* นัดที่ตกลงกันแล้ว ปักไว้เหนือช่องพิมพ์ ไม่ต้องเลื่อนหาการ์ดเก่าในประวัติแชท */}
+        {order?.meetupConfirmedAt && order.meetupAt && (
+          <div className="border-t border-neutral-200 bg-success-50 px-3 py-2 text-xs text-neutral-700">
+            นัดแล้ว {formatMeetupAt(order.meetupAt)} น. ที่ {order.meetupPlace}
+          </div>
+        )}
+
+        {meetupError && !showMeetupForm && (
+          <p className="border-t border-neutral-200 bg-neutral-0 px-3 py-2 text-xs text-error-500">
+            {meetupError}
+          </p>
+        )}
+
       {/* ระบบอ่านเวลาจากที่คุยกันได้ แต่ไม่บันทึกเอง — ภาษาไทยบอกเวลาหลายระบบปนกัน คนพิมพ์ต้อง
-          เป็นคนยืนยันว่าอ่านถูก ("ห้าโมง" = 17:00 แต่ "ห้าโมงเช้า" = 11:00)
-          ชิปนี้เป็นของชั่วคราวเหมือนฟอร์ม จึงลอยทับด้วยเหตุผลเดียวกัน */}
+          เป็นคนยืนยันว่าอ่านถูก ("ห้าโมง" = 17:00 แต่ "ห้าโมงเช้า" = 11:00) */}
       {showTimeChip && detectedTime && (
-        <div className="sheet-in absolute inset-x-0 bottom-full z-10 flex flex-wrap items-center gap-2 rounded-t-[var(--radius-lg)] border border-neutral-200 bg-brand-surface px-3 py-2 text-xs shadow-[0_-8px_24px_rgba(0,0,0,0.12)]">
+        <div className="sheet-in flex flex-wrap items-center gap-2 border-t border-neutral-200 bg-brand-surface px-3 py-2 text-xs">
           {/* คำกว้างๆ อย่าง "บ่าย" ระบบเดาเวลากลางๆ ให้ ต้องเขียนให้เห็นว่าเดา ไม่ใช่เวลาที่ผู้ใช้
               ระบุเอง ไม่งั้นคนกดยืนยันผ่านๆ แล้วได้นัดบ่ายสองทั้งที่ตั้งใจบอกแค่ "ช่วงบ่ายก็ได้" */}
           <span className="text-neutral-600">
@@ -513,6 +530,7 @@ export function ChatThread({
           </button>
         </div>
       )}
+      </div>
 
       {canProposeMeetup && showMeetupForm && (
         <form
@@ -592,17 +610,6 @@ export function ChatThread({
           </div>
           {offerError && <p className="text-xs text-error-500">{offerError}</p>}
         </form>
-      )}
-
-      {/* นัดที่ตกลงกันแล้ว ปักไว้เหนือช่องพิมพ์ ไม่ต้องเลื่อนหาการ์ดเก่าในประวัติแชท */}
-      {order?.meetupConfirmedAt && order.meetupAt && (
-        <div className="border-t border-neutral-100 bg-success-50 px-3 py-2 text-xs text-neutral-700">
-          นัดแล้ว {formatMeetupAt(order.meetupAt)} น. ที่ {order.meetupPlace}
-        </div>
-      )}
-
-      {meetupError && !showMeetupForm && (
-        <p className="border-t border-neutral-100 px-3 py-2 text-xs text-error-500">{meetupError}</p>
       )}
 
       <form onSubmit={onSend} className="flex items-center gap-2 border-t border-neutral-100 p-3">
