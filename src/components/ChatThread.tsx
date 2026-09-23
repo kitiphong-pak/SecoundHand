@@ -428,9 +428,22 @@ export function ChatThread({
         {otherUser.name}
       </div>
 
-      {/* เว้นที่ด้านล่างไว้ให้แถบที่ลอยอยู่ (นัดแล้ว/ชิปถามเวลา) ไม่บังข้อความล่าสุดตอนเลื่อนสุด */}
+      {/* นัดที่ตกลงกันแล้วกับชิปถามเวลาลอยคนละมุม (บนสุด / ล่างสุด) ตั้งใจให้อยู่ไกลกันไปเลย —
+          ตอนอยู่ชั้นเดียวกันมันเบียดกันจนอ่านยาก และอย่างหนึ่งเป็นข้อมูลถาวร อีกอย่างเป็นคำถาม
+          ชั่วคราวที่ต้องอยู่ติดมือใกล้ช่องพิมพ์ */}
+      <div className="relative flex flex-1 flex-col">
+        {/* นัดที่ตกลงกันแล้ว ปักไว้บนสุดของแชท ไม่ต้องเลื่อนหาการ์ดเก่าในประวัติ */}
+        {order?.meetupConfirmedAt && order.meetupAt && (
+          <div className="absolute inset-x-0 top-0 z-10 border-b border-neutral-200 bg-success-50 px-3 py-2 text-xs text-neutral-700 shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+            นัดแล้ว {formatMeetupAt(order.meetupAt)} น. ที่ {order.meetupPlace}
+          </div>
+        )}
+
+      {/* เว้นที่หัวท้ายไว้ให้แถบที่ลอยอยู่ ไม่บังข้อความแรกสุด/ล่าสุดตอนเลื่อนไปสุดทาง */}
       <div
-        className="flex flex-1 flex-col gap-2 overflow-y-auto px-4 pt-4 pb-12"
+        className={`flex flex-1 flex-col gap-2 overflow-y-auto px-4 pb-12 ${
+          order?.meetupConfirmedAt ? "pt-12" : "pt-4"
+        }`}
         style={{ minHeight: 320, maxHeight: 480 }}
       >
         {messages.length === 0 ? (
@@ -479,21 +492,13 @@ export function ChatThread({
         )}
         <div ref={bottomRef} />
       </div>
+      </div>
 
-      {/* ทุกอย่างที่อยู่เหนือช่องพิมพ์ลอยทับกล่องแชท ไม่ต่อท้ายให้กล่องสูงขึ้น — ไม่งั้นทุกครั้งที่มี
-          อะไรโผล่มา ข้อความในแชทจะถูกดันหายไปจากสายตาและหน้าทั้งหน้าจะกระโดด
-          ยึดที่ bottom-full ของกล่องนี้ ของที่ลอยจึงอยู่เหนือช่องพิมพ์พอดีเสมอ
-          แถบ "นัดแล้ว" ลอยไปกองอยู่ในชั้นเดียวกับชิปด้วย เพราะถ้าปล่อยไว้ในสายเลย์เอาต์ปกติ ชิปที่
-          ลอยอยู่จะไปทับมัน — ลำดับที่เห็นจึงเป็น [นัดแล้ว] แล้วค่อย [ชิปถามเวลา] แล้วถึงช่องพิมพ์ */}
+      {/* ของชั่วคราวที่อยู่เหนือช่องพิมพ์ (ชิปถามเวลา, ฟอร์มนัด, ฟอร์มเสนอราคา) ลอยทับกล่องแชท
+          ไม่ต่อท้ายให้กล่องสูงขึ้น — ไม่งั้นทุกครั้งที่มีอะไรโผล่มา ข้อความในแชทจะถูกดันหายไปจาก
+          สายตาและหน้าทั้งหน้าจะกระโดด ยึดที่ bottom-full ของกล่องนี้ จึงอยู่เหนือช่องพิมพ์พอดีเสมอ */}
       <div className="relative">
       <div className="absolute inset-x-0 bottom-full z-10 flex flex-col overflow-hidden rounded-t-[var(--radius-lg)] shadow-[0_-8px_24px_rgba(0,0,0,0.12)]">
-        {/* นัดที่ตกลงกันแล้ว ปักไว้เหนือช่องพิมพ์ ไม่ต้องเลื่อนหาการ์ดเก่าในประวัติแชท */}
-        {order?.meetupConfirmedAt && order.meetupAt && (
-          <div className="border-t border-neutral-200 bg-success-50 px-3 py-2 text-xs text-neutral-700">
-            นัดแล้ว {formatMeetupAt(order.meetupAt)} น. ที่ {order.meetupPlace}
-          </div>
-        )}
-
         {meetupError && !showMeetupForm && (
           <p className="border-t border-neutral-200 bg-neutral-0 px-3 py-2 text-xs text-error-500">
             {meetupError}
