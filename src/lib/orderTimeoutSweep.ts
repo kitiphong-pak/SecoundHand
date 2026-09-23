@@ -3,8 +3,7 @@ import { completeOrder, OrderStateConflictError } from "@/lib/orderCompletion";
 import { BUYER_CONFIRM_WINDOW_MS } from "@/lib/orderTiming";
 import { SYSTEM_ACTOR } from "@/lib/systemUser";
 
-// กวาดปิดออเดอร์ที่เลยกำหนดเวลารอ (buyer ไม่ยืนยันรับของภายใน 3 วัน หรือ seller ไม่กรอก OTP
-// ภายใน 24 ชม.) แบบ "เงียบ = ยอมรับ" ตามหลักการเดียวกับปุ่ม simulate-timeout เดโม แต่ตัวนี้ทำงาน
+// กวาดปิดออเดอร์ที่เลยกำหนดเวลารอ (buyer ไม่ยืนยันรับของภายใน 3 วัน) แบบ "เงียบ = ยอมรับ" ตามหลักการเดียวกับปุ่ม simulate-timeout เดโม แต่ตัวนี้ทำงาน
 // อัตโนมัติจริงผ่าน /api/cron/order-timeouts — เรียกซ้ำได้ปลอดภัย (idempotent) เพราะ query กรอง
 // เฉพาะ status ที่ยังค้างอยู่เท่านั้น ออเดอร์ที่ปิดไปแล้วจะไม่ถูกจับมาอีกในรอบถัดไป
 export async function processOrderTimeouts(): Promise<{ completedOrderIds: string[] }> {
@@ -17,13 +16,7 @@ export async function processOrderTimeouts(): Promise<{ completedOrderIds: strin
     .eq("status", "awaiting_buyer_confirmation")
     .lt("seller_marked_delivered_at", confirmDeadline);
 
-  const { data: overdueOtp } = await supabase
-    .from("orders")
-    .select("id, product_id")
-    .eq("status", "awaiting_otp_entry")
-    .lt("otp_expires_at", now.toISOString());
-
-  const overdue = [...(overdueConfirmations ?? []), ...(overdueOtp ?? [])];
+  const overdue = overdueConfirmations ?? [];
   const completedOrderIds: string[] = [];
   for (const o of overdue) {
     try {

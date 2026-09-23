@@ -31,7 +31,7 @@ export default async function MyListingsPage() {
     .limit(200);
   const products = (rows ?? []).map(mapProduct);
 
-  // สินค้าสถานะ "reserved" อยู่ได้หลายจุดใน order flow (รอชำระ/ชำระแล้ว/รอส่งมอบ/รอ OTP)
+  // สินค้าสถานะ "reserved" อยู่ได้หลายจุดใน order flow (รอชำระ/ชำระแล้ว/รอผู้ซื้อยืนยันรับของ)
   // ต้องดูสถานะออเดอร์จริงแทนป้าย "reserved" เดียวตายตัว ไม่งั้นจะค้างโชว์ "รอชำระเงิน"
   // ทั้งที่จริงจ่ายเงินและส่งของไปแล้ว
   const reservedIds = products.filter((p) => p.status === "reserved").map((p) => p.id);

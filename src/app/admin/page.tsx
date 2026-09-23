@@ -22,7 +22,6 @@ const ORDER_STATUSES: OrderStatus[] = [
   "pending_payment",
   "paid",
   "awaiting_buyer_confirmation",
-  "awaiting_otp_entry",
   "completed",
   "disputed",
   "cancelled",
@@ -129,7 +128,6 @@ interface RecentOrderRow {
 
 export default async function AdminDashboardPage() {
   const nowDate = new Date();
-  const now = nowDate.toISOString();
   const buyerConfirmCutoff = new Date(nowDate.getTime() - BUYER_CONFIRM_WINDOW_MS).toISOString();
 
   const [
@@ -145,7 +143,6 @@ export default async function AdminDashboardPage() {
     { data: gmvTotalRow },
     { data: gmvDailyRows },
     { data: reviewStatsRows },
-    { count: overdueOtpCount },
     { count: overdueBuyerConfirmCount },
     { count: disputedCount },
     { data: recentOrderRows },
@@ -170,11 +167,6 @@ export default async function AdminDashboardPage() {
     supabase.rpc("admin_gmv_daily", { since: FOURTEEN_DAYS_AGO }) as unknown as Promise<{ data: GmvDailyRow[] | null }>,
     // จำนวนรีวิว + คะแนนเฉลี่ยทั้งระบบ คำนวณฝั่ง Postgres แทนการดึง rating ทุกแถวมาเฉลี่ยเอง
     supabase.rpc("admin_review_stats") as unknown as Promise<{ data: ReviewStatsRow[] | null }>,
-    supabase
-      .from("orders")
-      .select("*", { count: "exact", head: true })
-      .eq("status", "awaiting_otp_entry")
-      .lt("otp_expires_at", now),
     supabase
       .from("orders")
       .select("*", { count: "exact", head: true })
@@ -223,7 +215,7 @@ export default async function AdminDashboardPage() {
     return { label, value: newUsersByDay.get(key) ?? 0 };
   });
 
-  const hasUrgent = (disputedCount ?? 0) > 0 || (overdueOtpCount ?? 0) > 0 || (overdueBuyerConfirmCount ?? 0) > 0;
+  const hasUrgent = (disputedCount ?? 0) > 0 || (overdueBuyerConfirmCount ?? 0) > 0;
 
   // เตรียมข้อมูลตาราง "ออเดอร์ล่าสุด" — ต้อง resolve ชื่อผู้ซื้อ + ชื่อสินค้าจาก id แยกต่างหาก
   const recentOrders = (recentOrderRows ?? []) as RecentOrderRow[];
@@ -253,13 +245,6 @@ export default async function AdminDashboardPage() {
             title={`${disputedCount} ข้อพิพาทรอตรวจสอบ`}
             description="ผู้ซื้อเปิดข้อพิพาทและกำลังรอแอดมินตัดสิน"
             href="/admin/disputes"
-          />
-        )}
-        {(overdueOtpCount ?? 0) > 0 && (
-          <AlertBanner
-            tone="warning"
-            title={`${overdueOtpCount} ออเดอร์เลยกำหนดรอผู้ขายกรอก OTP`}
-            description="ผู้ซื้อยืนยันรับสินค้าแล้ว แต่ผู้ขายยังไม่กรอก OTP ภายในเวลาที่กำหนด — ระบบยังไม่ปิดออเดอร์ให้อัตโนมัติ"
           />
         )}
         {(overdueBuyerConfirmCount ?? 0) > 0 && (

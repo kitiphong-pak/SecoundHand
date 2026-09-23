@@ -13,21 +13,21 @@ export class OrderStateConflictError extends Error {
   }
 }
 
-// ใช้ร่วมกันระหว่าง verify-otp และ simulate-timeout/cron — ทั้งสองจุดปิดออเดอร์แบบเดียวกันทุกอย่าง
+// ใช้ร่วมกันระหว่างผู้ซื้อกดยืนยันรับของ กับ simulate-timeout/cron — ทุกจุดปิดออเดอร์เหมือนกันหมด
 // (ปั๊ม completed + completedAt แล้วเปลี่ยนสถานะสินค้าเป็น sold) ต่างกันแค่เงื่อนไขที่นำมาถึงจุดนี้
-// เงื่อนไข .in("status", ...) ใน UPDATE คือ compare-and-swap กันสองคำขอ (เช่น ผู้ซื้อกดยืนยันรับของ
+// เงื่อนไข .eq("status", ...) ใน UPDATE คือ compare-and-swap กันสองคำขอ (เช่น ผู้ซื้อกดยืนยันรับของ
 // พอดีตอน cron กำลังจะ timeout ออเดอร์เดียวกัน) แข่งกันเขียนทับกันโดยไม่มีใคร error เลย
 export async function completeOrder(
   orderId: string,
   productId: string,
   actor: { id: string; role: string; name: string },
-  via: "otp" | "timeout"
+  via: "buyer_confirmed" | "timeout"
 ): Promise<Order> {
   const { data: updated, error } = await supabase
     .from("orders")
     .update({ status: "completed", completed_at: new Date().toISOString() })
     .eq("id", orderId)
-    .in("status", ["awaiting_buyer_confirmation", "awaiting_otp_entry"])
+    .eq("status", "awaiting_buyer_confirmation")
     .select()
     .maybeSingle();
   if (error) throw error;

@@ -7,13 +7,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const { mockState } = vi.hoisted(() => ({
   mockState: {
     ordersResult: { data: null as Record<string, unknown> | null, error: null as Error | null },
+    eqCalls: [] as unknown[][],
   },
 }));
 
 vi.mock("@/lib/supabase", () => {
   const chain = {
     update: vi.fn(() => chain),
-    eq: vi.fn(() => chain),
+    eq: vi.fn((...args: unknown[]) => {
+      mockState.eqCalls.push(args);
+      return chain;
+    }),
     in: vi.fn(() => chain),
     select: vi.fn(() => chain),
     maybeSingle: vi.fn(async () => mockState.ordersResult),
@@ -33,11 +37,23 @@ const actor = { id: "u1", role: "user", name: "ทดสอบ" };
 describe("completeOrder", () => {
   beforeEach(() => {
     mockState.ordersResult = { data: null, error: null };
+    mockState.eqCalls = [];
+  });
+
+  // เงื่อนไขนี้คือ compare-and-swap ที่กันไม่ให้เขียนทับออเดอร์ที่ cron หรืออีกฝ่ายเพิ่งปิดไปพอดี
+  // ถ้าหายไป UPDATE จะโดนแถวนั้นเสมอ แล้วออเดอร์ที่ปิดแล้วจะถูกปั๊มเป็น completed ซ้ำได้เรื่อยๆ
+  it("UPDATE ต้องล็อกสถานะเดิมไว้ด้วยเสมอ ไม่ใช่ยิงใส่ id อย่างเดียว", async () => {
+    mockState.ordersResult = {
+      data: { id: "order-1", product_id: "product-1", buyer_id: "u1", seller_id: "u2", status: "completed", amount: "500", created_at: "2026-01-01T00:00:00Z" },
+      error: null,
+    };
+    await completeOrder("order-1", "product-1", actor, "buyer_confirmed");
+    expect(mockState.eqCalls).toContainEqual(["status", "awaiting_buyer_confirmation"]);
   });
 
   it("โยน OrderStateConflictError เมื่อ UPDATE ไม่โดนแถวไหนเลย (แข่งกับคำขออื่นแล้วแพ้)", async () => {
     mockState.ordersResult = { data: null, error: null };
-    await expect(completeOrder("order-1", "product-1", actor, "otp")).rejects.toThrow(
+    await expect(completeOrder("order-1", "product-1", actor, "buyer_confirmed")).rejects.toThrow(
       OrderStateConflictError
     );
   });
@@ -55,7 +71,7 @@ describe("completeOrder", () => {
       },
       error: null,
     };
-    const result = await completeOrder("order-1", "product-1", actor, "otp");
+    const result = await completeOrder("order-1", "product-1", actor, "buyer_confirmed");
     expect(result.id).toBe("order-1");
     expect(result.status).toBe("completed");
     expect(result.amount).toBe(500);

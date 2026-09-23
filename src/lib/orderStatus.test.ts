@@ -19,17 +19,8 @@ describe("ป้ายสถานะออเดอร์", () => {
     }
   });
 
-  // ต้นเหตุที่แก้ไฟล์นี้: ตอน awaiting_otp_entry ป้ายเดิมเขียนว่า "รอผู้ขายกรอก OTP"
-  // ทั้งสองฝ่าย ผู้ซื้ออ่านแล้วนั่งรอเฉยๆ ทั้งที่ออเดอร์เดินต่อไม่ได้จนกว่าจะแจ้งรหัสให้ผู้ขาย
-  it("ขั้นกรอก OTP บอกผู้ซื้อว่าต้องแจ้งรหัส ไม่ใช่ให้นั่งรอ", () => {
-    const buyer = orderStatusBadge("awaiting_otp_entry", "buyer");
-    expect(buyer.label).not.toEqual(ORDER_STATUS_LABEL.awaiting_otp_entry.label);
-    expect(buyer.label).toContain("แจ้งรหัส");
-    expect(orderStatusBadge("awaiting_otp_entry", "seller").label).toContain("กรอกรหัส");
-  });
-
   it("ขั้นที่ยังมีคนต้องลงมือ ป้ายของสองฝ่ายต้องไม่เหมือนกัน", () => {
-    for (const status of ["pending_payment", "paid", "awaiting_buyer_confirmation", "awaiting_otp_entry"] as const) {
+    for (const status of ["pending_payment", "paid", "awaiting_buyer_confirmation"] as const) {
       const buyer = orderStatusBadge(status, "buyer");
       const seller = orderStatusBadge(status, "seller");
       expect(buyer.label).not.toEqual(seller.label);

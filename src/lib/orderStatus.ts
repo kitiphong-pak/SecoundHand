@@ -10,7 +10,6 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, StatusBadge> = {
   pending_payment: { label: "รอชำระเงิน", status: "pending" },
   paid: { label: "ชำระเงินแล้ว รอส่งมอบ", status: "info" },
   awaiting_buyer_confirmation: { label: "รอผู้ซื้อยืนยันรับสินค้า", status: "info" },
-  awaiting_otp_entry: { label: "รอผู้ขายกรอก OTP", status: "info" },
   completed: { label: "ปิดการซื้อขายแล้ว", status: "success" },
   disputed: { label: "มีข้อพิพาท", status: "error" },
   cancelled: { label: "ยกเลิก คืนเงินแล้ว (เดโม)", status: "neutral" },
@@ -35,10 +34,6 @@ const PARTY_LABEL: Partial<Record<OrderStatus, Record<Party, StatusBadge>>> = {
   awaiting_buyer_confirmation: {
     buyer: { label: "รอคุณยืนยันรับสินค้า", status: "pending" },
     seller: { label: "รอผู้ซื้อยืนยันรับสินค้า", status: "info" },
-  },
-  awaiting_otp_entry: {
-    buyer: { label: "แจ้งรหัสให้ผู้ขาย", status: "pending" },
-    seller: { label: "กรอกรหัสจากผู้ซื้อ", status: "pending" },
   },
 };
 

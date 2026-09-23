@@ -21,11 +21,6 @@ describe("getOrderUrgency", () => {
     expect(getOrderUrgency("awaiting_buyer_confirmation", "seller", false)).toBe("waiting");
   });
 
-  it("awaiting_otp_entry: action สำหรับผู้ขาย (ต้องกรอก OTP), waiting สำหรับผู้ซื้อ", () => {
-    expect(getOrderUrgency("awaiting_otp_entry", "seller", false)).toBe("action");
-    expect(getOrderUrgency("awaiting_otp_entry", "buyer", false)).toBe("waiting");
-  });
-
   it("completed: review ถ้ายังไม่รีวิว, done ถ้ารีวิวแล้ว — ไม่ขึ้นกับ role", () => {
     expect(getOrderUrgency("completed", "buyer", false)).toBe("review");
     expect(getOrderUrgency("completed", "seller", false)).toBe("review");
@@ -48,7 +43,6 @@ describe("getOrderUrgency", () => {
       "pending_payment",
       "paid",
       "awaiting_buyer_confirmation",
-      "awaiting_otp_entry",
       "completed",
       "disputed",
       "cancelled",

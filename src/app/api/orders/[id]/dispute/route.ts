@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapOrder } from "@/lib/mappers";
-import { DISPUTE_GRACE_MS } from "@/lib/orderTiming";
+import { DISPUTE_GRACE_MS } from "@/lib/orderFlowConfig";
 import { logAction } from "@/lib/auditLog";
 
 export async function POST(
@@ -31,7 +31,7 @@ export async function POST(
     if (elapsed > DISPUTE_GRACE_MS) {
       return NextResponse.json({ error: "เกินระยะเวลาที่เปิดข้อพิพาทได้แล้ว" }, { status: 410 });
     }
-  } else if (order.status !== "awaiting_buyer_confirmation" && order.status !== "awaiting_otp_entry") {
+  } else if (order.status !== "awaiting_buyer_confirmation") {
     return NextResponse.json({ error: "ไม่สามารถเปิดข้อพิพาทในสถานะนี้ได้" }, { status: 409 });
   }
 
@@ -45,7 +45,7 @@ export async function POST(
     .eq("id", id)
     // ต้องยังอยู่ในสถานะเดียวกับตอนเช็คด้านบนจริงๆ — กันเช่น cron ปิดออเดอร์ (completed) ไปแล้ว
     // ระหว่างที่ผู้ซื้อกำลังส่งฟอร์มเปิดข้อพิพาทพอดี
-    .in("status", ["completed", "awaiting_buyer_confirmation", "awaiting_otp_entry"])
+    .in("status", ["completed", "awaiting_buyer_confirmation"])
     .select()
     .maybeSingle();
   if (error) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });

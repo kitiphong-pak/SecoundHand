@@ -18,7 +18,6 @@ const ACTIONABLE_ROLE: Partial<Record<OrderStatus, "buyer" | "seller">> = {
   pending_payment: "buyer",
   paid: "seller",
   awaiting_buyer_confirmation: "buyer",
-  awaiting_otp_entry: "seller",
 };
 
 export function getOrderUrgency(

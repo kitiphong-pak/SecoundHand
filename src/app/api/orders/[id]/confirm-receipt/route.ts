@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapOrder } from "@/lib/mappers";
-import { generateOtp, SELLER_OTP_WINDOW_MS } from "@/lib/orderTiming";
+import { completeOrder, OrderStateConflictError } from "@/lib/orderCompletion";
 import { logAction } from "@/lib/auditLog";
 
 export async function POST(
@@ -24,27 +24,26 @@ export async function POST(
     return NextResponse.json({ error: "ออเดอร์นี้ไม่อยู่ในสถานะที่ยืนยันได้" }, { status: 409 });
   }
 
-  const { data: updated, error } = await supabase
-    .from("orders")
-    .update({
-      status: "awaiting_otp_entry",
-      buyer_confirmed_at: new Date().toISOString(),
-      otp_code: generateOtp(),
-      otp_expires_at: new Date(Date.now() + SELLER_OTP_WINDOW_MS).toISOString(),
-    })
-    .eq("id", id)
-    // กัน race กับ cron/simulate-timeout ที่อาจปิดออเดอร์นี้ไปแล้วพอดีตอนใกล้ครบกำหนด
-    // ไม่งั้นจะเผลอเขียนสถานะทับ "completed" กลับไปเป็น "awaiting_otp_entry" ได้
-    .eq("status", "awaiting_buyer_confirmation")
-    .select()
-    .maybeSingle();
-  if (error) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
-  if (!updated) {
-    return NextResponse.json(
-      { error: "ออเดอร์นี้ไม่อยู่ในสถานะที่ยืนยันได้แล้ว กรุณารีเฟรชหน้า" },
-      { status: 409 }
-    );
+  // ผู้ซื้อกดยืนยันแล้วจบเลย ไม่มีขั้น OTP คั่นอีก — completeOrder ทำ compare-and-swap บนสถานะเดิม
+  // ให้ด้วย จึงกัน race กับ cron/simulate-timeout ที่อาจปิดออเดอร์นี้ไปก่อนแล้วพอดี
+  let updated;
+  try {
+    updated = await completeOrder(order.id, order.productId, user, "buyer_confirmed");
+  } catch (e) {
+    if (e instanceof OrderStateConflictError) {
+      return NextResponse.json(
+        { error: "ออเดอร์นี้ไม่อยู่ในสถานะที่ยืนยันได้แล้ว กรุณารีเฟรชหน้า" },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });
   }
+
+  // บันทึกเวลาที่ผู้ซื้อกดไว้ด้วย ไม่ใช่แค่ completed_at — Phase 2 ต้องใช้แยกว่าใครกดยืนยันบ้าง
+  await supabase
+    .from("orders")
+    .update({ buyer_confirmed_at: new Date().toISOString() })
+    .eq("id", order.id);
 
   await logAction({
     actorId: user.id,
@@ -55,5 +54,5 @@ export async function POST(
     targetId: order.id,
   });
 
-  return NextResponse.json({ order: mapOrder(updated) });
+  return NextResponse.json({ order: updated });
 }

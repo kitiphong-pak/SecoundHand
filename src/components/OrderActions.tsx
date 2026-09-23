@@ -21,7 +21,6 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [otpInput, setOtpInput] = useState("");
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -50,7 +49,7 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
     }
   }, [order.status, order.completedAt]);
 
-  // ออเดอร์รอฝั่งตรงข้ามทำอะไรบางอย่างอยู่ (ชำระเงิน/ส่งมอบ/ยืนยัน/กรอก OTP)
+  // ออเดอร์รอฝั่งตรงข้ามทำอะไรบางอย่างอยู่ (ชำระเงิน/ส่งมอบ/ยืนยันรับของ)
   // ต้อง refresh หน้าเป็นระยะเพื่อดึงสถานะล่าสุด ไม่งั้นต้องกด reload เองถึงจะเห็นการเปลี่ยนแปลง
   const isTerminal =
     order.status === "completed" || order.status === "disputed" || order.status === "cancelled";
@@ -173,56 +172,6 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
             >
               (เดโม) จำลองว่าเวลาหมดแล้ว — ระบบยืนยันแทน
             </button>
-          )}
-        </>
-      )}
-
-      {/* รอผู้ขายกรอก OTP */}
-      {order.status === "awaiting_otp_entry" && order.otpExpiresAt && (
-        <>
-          {role === "buyer" && (
-            <div className="rounded-[var(--radius-md)] bg-primary-50 p-4 text-center">
-              <p className="text-xs text-neutral-500">แจ้งรหัสนี้ให้ผู้ขายเพื่อปิดการขาย</p>
-              <p className="mt-1 font-[var(--font-display)] text-3xl font-semibold tracking-widest text-primary-600">
-                {order.otpCode}
-              </p>
-              <p className="mt-1 text-xs text-neutral-400">
-                <Countdown targetIso={order.otpExpiresAt} />
-              </p>
-            </div>
-          )}
-          {role === "seller" && (
-            <>
-              <p className="text-sm text-neutral-600">
-                ขอรหัส OTP จากผู้ซื้อ แล้วกรอกด้านล่างเพื่อปิดการขาย —{" "}
-                <Countdown targetIso={order.otpExpiresAt} />
-              </p>
-              <div className="flex gap-2">
-                <input
-                  value={otpInput}
-                  onChange={(e) => setOtpInput(e.target.value)}
-                  placeholder="รหัส 6 หลัก"
-                  maxLength={6}
-                  className="flex-1 rounded-[var(--radius-md)] border border-neutral-300 px-3.5 py-2.5 text-center text-lg tracking-widest outline-none focus:border-primary-500"
-                />
-                <Button
-                  disabled={loading || otpInput.length !== 6}
-                  onClick={() =>
-                    run(() => call(`/api/orders/${order.id}/verify-otp`, { code: otpInput }))
-                  }
-                >
-                  ยืนยัน
-                </Button>
-              </div>
-              <button
-                type="button"
-                disabled={loading}
-                className="text-xs text-neutral-400 underline"
-                onClick={() => run(() => call(`/api/orders/${order.id}/simulate-timeout`))}
-              >
-                (เดโม) จำลองว่าเวลาหมดแล้ว — ระบบปิดอัตโนมัติ
-              </button>
-            </>
           )}
         </>
       )}

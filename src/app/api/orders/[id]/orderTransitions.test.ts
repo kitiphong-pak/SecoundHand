@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createSupabaseMock, hasOp } from "@/test/supabaseMock";
 
 // state machine ของออเดอร์ — pending_payment → paid → awaiting_buyer_confirmation
-//                            → awaiting_otp_entry → completed (แยกไป cancelled/disputed ได้)
+//                            → completed (แยกไป cancelled/disputed ได้)
 //
 // สิ่งที่เทสชุดนี้เฝ้าคือ "compare-and-swap": ทุกคำสั่งเปลี่ยนสถานะต้องแนบเงื่อนไขสถานะเดิม
 // ไปกับ UPDATE ด้วยเสมอ ไม่ใช่แค่เช็คใน JS แล้วค่อยเขียน เพราะระหว่างสองบรรทัดนั้นมีช่องให้
@@ -22,7 +22,7 @@ vi.mock("@/lib/supabase", () => ({
 vi.mock("@/lib/auth", () => ({ getCurrentUser: async () => mockUser.current }));
 vi.mock("@/lib/auditLog", () => ({ logAction: async () => {} }));
 
-// verify-otp ปิดออเดอร์ผ่าน completeOrder ซึ่งมีเทสของตัวเองอยู่แล้วใน orderCompletion.test.ts
+// การปิดออเดอร์ทำผ่าน completeOrder ซึ่งมีเทสของตัวเองอยู่แล้วใน orderCompletion.test.ts
 // ตรงนี้สนใจแค่ว่า route เรียกมันเมื่อไหร่ และแปลง error ที่โยนออกมาเป็น status อะไร
 vi.mock("@/lib/orderCompletion", async () => {
   const actual = await vi.importActual<typeof import("@/lib/orderCompletion")>("@/lib/orderCompletion");
@@ -36,7 +36,6 @@ const { POST: pay } = await import("./pay/route");
 const { POST: cancel } = await import("./cancel/route");
 const { POST: markDelivered } = await import("./mark-delivered/route");
 const { POST: confirmReceipt } = await import("./confirm-receipt/route");
-const { POST: verifyOtp } = await import("./verify-otp/route");
 const { POST: openDispute } = await import("./dispute/route");
 const { OrderStateConflictError } = await import("@/lib/orderCompletion");
 
@@ -156,7 +155,7 @@ describe("ยกเลิกออเดอร์", () => {
   });
 
   it("เลยขั้นส่งมอบไปแล้วยกเลิกไม่ได้ ต้องไปใช้ระบบข้อพิพาทแทน → 409", async () => {
-    for (const status of ["awaiting_buyer_confirmation", "awaiting_otp_entry", "completed"]) {
+    for (const status of ["awaiting_buyer_confirmation", "completed"]) {
       mock.current = createSupabaseMock();
       mock.current.queueResult({ data: order(status), error: null });
 
@@ -215,20 +214,30 @@ describe("ผู้ขายแจ้งส่งมอบ (paid → awaiting_bu
   });
 });
 
-describe("ผู้ซื้อยืนยันรับของ (awaiting_buyer_confirmation → awaiting_otp_entry)", () => {
-  it("ยืนยันแล้วต้องออก OTP พร้อมวันหมดอายุในอนาคต", async () => {
+describe("ผู้ซื้อยืนยันรับของ (awaiting_buyer_confirmation → completed)", () => {
+  // 1b เอาขั้น OTP ออก — ผู้ซื้อกดยืนยันแล้วปิดออเดอร์เลย ไม่มีขั้นให้ผู้ขายกรอกรหัสคั่นอีก
+  it("กดยืนยันแล้วปิดออเดอร์ทันที ผ่าน completeOrder ตัวเดียวกับที่ cron ใช้", async () => {
+    let via: string | null = null;
+    completeOrderMock.current = async (...a: unknown[]) => {
+      via = String(a[3]);
+      return { id: "order-1", status: "completed" };
+    };
     mock.current!.queueResult({ data: order("awaiting_buyer_confirmation"), error: null });
-    mock.current!.queueResult({ data: order("awaiting_otp_entry"), error: null });
+    mock.current!.queueResult({ data: null, error: null }); // อัปเดต buyer_confirmed_at
 
     const res = await confirmReceipt(req(), params);
     expect(res.status).toBe(200);
+    expect((await res.json()).order.status).toBe("completed");
+    expect(via).toBe("buyer_confirmed");
+  });
 
+  it("บันทึกเวลาที่ผู้ซื้อกดยืนยันไว้ด้วย (Phase 2 ต้องใช้แยกว่าใครกดบ้าง)", async () => {
+    mock.current!.queueResult({ data: order("awaiting_buyer_confirmation"), error: null });
+    mock.current!.queueResult({ data: null, error: null });
+
+    await confirmReceipt(req(), params);
     const update = mock.current!.callsTo("orders")[1];
-    const payload = updateOf(update);
-    expect(payload.status).toBe("awaiting_otp_entry");
-    expect(String(payload.otp_code)).toMatch(/^\d{4,8}$/);
-    expect(Date.parse(String(payload.otp_expires_at))).toBeGreaterThan(Date.now());
-    expect(hasOp(update, "eq", "status", "awaiting_buyer_confirmation")).toBe(true);
+    expect(Date.parse(String(updateOf(update).buyer_confirmed_at))).toBeLessThanOrEqual(Date.now());
   });
 
   it("ผู้ขายกดยืนยันรับของแทนผู้ซื้อไม่ได้ → 403", async () => {
@@ -237,68 +246,12 @@ describe("ผู้ซื้อยืนยันรับของ (awaiting_bu
     expect((await confirmReceipt(req(), params)).status).toBe(403);
   });
 
-  it("สถานะเปลี่ยนไปแล้วระหว่างทาง → 409", async () => {
-    mock.current!.queueResult({ data: order("awaiting_buyer_confirmation"), error: null });
-    mock.current!.queueResult({ data: null, error: null });
-    expect((await confirmReceipt(req(), params)).status).toBe(409);
-  });
-});
-
-describe("ผู้ขายกรอก OTP ปิดออเดอร์", () => {
-  const withOtp = (over: Record<string, unknown> = {}) => ({
-    ...order("awaiting_otp_entry"),
-    otp_code: "482913",
-    otp_expires_at: new Date(Date.now() + 60_000).toISOString(),
-    ...over,
-  });
-
-  beforeEach(() => {
-    mockUser.current = SELLER;
-    completeOrderMock.current = async () => ({ id: "order-1", status: "completed" });
-  });
-
-  it("กรอกถูกต้องแล้วปิดออเดอร์", async () => {
-    mock.current!.queueResult({ data: withOtp(), error: null });
-    expect((await verifyOtp(reqJson({ code: "482913" }), params)).status).toBe(200);
-  });
-
-  it("กรอกผิดต้องไม่ปิดออเดอร์เด็ดขาด → 400", async () => {
-    let called = false;
-    completeOrderMock.current = async () => {
-      called = true;
-      return {};
-    };
-    mock.current!.queueResult({ data: withOtp(), error: null });
-
-    expect((await verifyOtp(reqJson({ code: "000000" }), params)).status).toBe(400);
-    expect(called).toBe(false);
-  });
-
-  it("ไม่ส่งรหัสมาเลยก็ต้องไม่ผ่าน แม้ otp_code ในฐานข้อมูลจะว่าง", async () => {
-    mock.current!.queueResult({ data: withOtp({ otp_code: null }), error: null });
-    expect((await verifyOtp(reqJson({}), params)).status).toBe(400);
-  });
-
-  it("OTP หมดอายุแล้ว → 410 ถึงจะกรอกรหัสถูกก็ตาม", async () => {
-    mock.current!.queueResult({
-      data: withOtp({ otp_expires_at: new Date(Date.now() - 1000).toISOString() }),
-      error: null,
-    });
-    expect((await verifyOtp(reqJson({ code: "482913" }), params)).status).toBe(410);
-  });
-
-  it("ผู้ซื้อกรอก OTP เองไม่ได้ → 403", async () => {
-    mockUser.current = BUYER;
-    mock.current!.queueResult({ data: withOtp(), error: null });
-    expect((await verifyOtp(reqJson({ code: "482913" }), params)).status).toBe(403);
-  });
-
   it("ออเดอร์ถูกปิดไปแล้วโดย cron พอดี → 409 ไม่ใช่ 500", async () => {
     completeOrderMock.current = async () => {
       throw new OrderStateConflictError();
     };
-    mock.current!.queueResult({ data: withOtp(), error: null });
-    expect((await verifyOtp(reqJson({ code: "482913" }), params)).status).toBe(409);
+    mock.current!.queueResult({ data: order("awaiting_buyer_confirmation"), error: null });
+    expect((await confirmReceipt(req(), params)).status).toBe(409);
   });
 });
 
@@ -312,7 +265,7 @@ describe("เปิดข้อพิพาท", () => {
     const update = mock.current!.callsTo("orders")[1];
     expect(updateOf(update).dispute_reason).toBe("ของไม่ตรงปก");
     expect(
-      hasOp(update, "in", "status", ["completed", "awaiting_buyer_confirmation", "awaiting_otp_entry"])
+      hasOp(update, "in", "status", ["completed", "awaiting_buyer_confirmation"])
     ).toBe(true);
   });
 

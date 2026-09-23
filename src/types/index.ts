@@ -39,7 +39,6 @@ export type OrderStatus =
   | "pending_payment" // รอผู้ซื้อชำระเงิน (demo)
   | "paid" // ชำระเงินแล้ว รอผู้ขายส่งมอบ
   | "awaiting_buyer_confirmation" // ผู้ขายแจ้งส่งมอบแล้ว กำลังนับเวลารอผู้ซื้อยืนยัน
-  | "awaiting_otp_entry" // ผู้ซื้อยืนยันรับของแล้ว ระบบออก OTP รอผู้ขายกรอก
   | "completed" // ปิดการซื้อขาย ปล่อยเงินให้ผู้ขายแล้ว (กรอก OTP ถูก หรือ auto-complete)
   | "disputed" // มีข้อพิพาท รอแอดมินตัดสิน
   | "cancelled"; // แอดมินตัดสินข้อพิพาทให้ฝั่งผู้ซื้อ ถือว่ายกเลิก/คืนเงิน (เดโม)
@@ -52,8 +51,6 @@ export interface Order {
   status: OrderStatus;
   amount: number;
   paidAt?: string;
-  otpCode?: string; // สร้างตอนผู้ซื้อกดยืนยันได้รับของ ใช้ครั้งเดียว
-  otpExpiresAt?: string;
   sellerMarkedDeliveredAt?: string; // เริ่มนับ timeout รอบที่ 1 (ผู้ซื้อ)
   buyerConfirmedAt?: string; // เริ่มนับ timeout รอบที่ 2 (ผู้ขายกรอก OTP)
   completedAt?: string;

@@ -43,8 +43,6 @@ export function mapOrder(row: Record<string, unknown>): Order {
     status: row.status as Order["status"],
     amount: Number(row.amount),
     paidAt: (row.paid_at as string | null) ?? undefined,
-    otpCode: (row.otp_code as string | null) ?? undefined,
-    otpExpiresAt: (row.otp_expires_at as string | null) ?? undefined,
     sellerMarkedDeliveredAt: (row.seller_marked_delivered_at as string | null) ?? undefined,
     buyerConfirmedAt: (row.buyer_confirmed_at as string | null) ?? undefined,
     completedAt: (row.completed_at as string | null) ?? undefined,
