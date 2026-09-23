@@ -78,6 +78,95 @@ describe("ไฟล์ migration", () => {
     }
   });
 
+  // migration 020: โครงสร้างของ flow นัดเจอ — คอลัมน์ต้องพร้อมก่อนโค้ดของ 1b/1c จะมาใช้
+  it("orders มีคอลัมน์ของการนัดเจอและการยกเลิกครบ (migration 020)", async () => {
+    const rows = await q<{ column_name: string }>(
+      `select column_name from information_schema.columns
+       where table_schema = 'public' and table_name = 'orders'`
+    );
+    const cols = rows.map((r) => r.column_name);
+    for (const c of [
+      "meetup_at",
+      "meetup_place",
+      "meetup_proposed_by",
+      "meetup_confirmed_at",
+      "seller_confirmed_at",
+      "cancelled_by",
+      "cancel_reason",
+    ]) {
+      expect(cols).toContain(c);
+    }
+  });
+
+  it("รับสถานะใหม่ (reserved, meetup_scheduled) และยังรับสถานะเดิมระหว่างเปลี่ยนผ่าน", async () => {
+    await db.truncateAll();
+    const [seller] = await q<{ id: string }>(
+      `insert into users (name, email, province) values ('ผู้ขาย','s@x.com','เชียงใหม่') returning id`
+    );
+    const [buyer] = await q<{ id: string }>(
+      `insert into users (name, email, province) values ('ผู้ซื้อ','b@x.com','เชียงใหม่') returning id`
+    );
+    const newProduct = async () => {
+      const [p] = await q<{ id: string }>(
+        `insert into products (seller_id, title, description, price, category, condition, province)
+         values ($1,'ของ','ดี',100,'อื่นๆ','good','เชียงใหม่') returning id`,
+        [seller.id]
+      );
+      return p.id;
+    };
+
+    for (const status of ["reserved", "meetup_scheduled", "pending_payment", "completed"]) {
+      await expect(
+        q(`insert into orders (product_id, buyer_id, seller_id, status, amount) values ($1,$2,$3,$4,100)`, [
+          await newProduct(),
+          buyer.id,
+          seller.id,
+          status,
+        ])
+      ).resolves.toBeDefined();
+    }
+
+    // สถานะที่ไม่รู้จักต้องถูกปฏิเสธที่ฐานข้อมูล ไม่ใช่รอให้โค้ดเช็คเอง
+    await expect(
+      q(`insert into orders (product_id, buyer_id, seller_id, status, amount) values ($1,$2,$3,'ขายแล้วมั้ง',100)`, [
+        await newProduct(),
+        buyer.id,
+        seller.id,
+      ])
+    ).rejects.toThrow();
+  });
+
+  it("cancel_reason รับเฉพาะค่าที่กำหนดไว้ (migration 020)", async () => {
+    await db.truncateAll();
+    const [seller] = await q<{ id: string }>(
+      `insert into users (name, email, province) values ('ผู้ขาย','s@x.com','เชียงใหม่') returning id`
+    );
+    const [buyer] = await q<{ id: string }>(
+      `insert into users (name, email, province) values ('ผู้ซื้อ','b@x.com','เชียงใหม่') returning id`
+    );
+    const [product] = await q<{ id: string }>(
+      `insert into products (seller_id, title, description, price, category, condition, province)
+       values ($1,'ของ','ดี',100,'อื่นๆ','good','เชียงใหม่') returning id`,
+      [seller.id]
+    );
+
+    await expect(
+      q(
+        `insert into orders (product_id, buyer_id, seller_id, status, amount, cancel_reason)
+         values ($1,$2,$3,'cancelled',100,'no_show_buyer')`,
+        [product.id, buyer.id, seller.id]
+      )
+    ).resolves.toBeDefined();
+
+    await expect(
+      q(
+        `insert into orders (product_id, buyer_id, seller_id, status, amount, cancel_reason)
+         values ($1,$2,$3,'cancelled',100,'เพราะอยากยกเลิก')`,
+        [product.id, buyer.id, seller.id]
+      )
+    ).rejects.toThrow();
+  });
+
   // migration 018 + 019: รหัสผ่านอยู่ที่ Supabase Auth ที่เดียว ของเดิมในตารางเราต้องหายไปหมด
   it("ไม่เหลือตาราง sessions และคอลัมน์ users.password_hash แล้ว (migration 019)", async () => {
     const [{ sessions }] = await q<{ sessions: string | null }>(`select to_regclass('public.sessions') as sessions`);
