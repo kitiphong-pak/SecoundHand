@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { Textarea } from "@/components/ui/Textarea";
 import { Countdown } from "@/components/Countdown";
 import type { Order } from "@/types";
 import { BUYER_CONFIRM_WINDOW_MS } from "@/lib/orderTiming";
@@ -21,8 +20,6 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [showDisputeForm, setShowDisputeForm] = useState(false);
-  const [disputeReason, setDisputeReason] = useState("");
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -38,21 +35,10 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
     }
   };
 
-  // เช็คฝั่ง client เท่านั้น (ต้องพึ่ง Date.now() ซึ่งไม่ pure สำหรับ render โดยตรง)
-  // เริ่มที่ false กัน hydration mismatch แล้วค่อยอัปเดตจริงหลัง mount
-  const [canDisputeAfterComplete, setCanDisputeAfterComplete] = useState(false);
-  useEffect(() => {
-    if (order.status === "completed" && order.completedAt) {
-      const elapsed = Date.now() - new Date(order.completedAt).getTime();
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setCanDisputeAfterComplete(elapsed < 2 * 24 * 60 * 60 * 1000);
-    }
-  }, [order.status, order.completedAt]);
-
-  // ออเดอร์รอฝั่งตรงข้ามทำอะไรบางอย่างอยู่ (ชำระเงิน/ส่งมอบ/ยืนยันรับของ)
+  // ออเดอร์รอฝั่งตรงข้ามทำอะไรบางอย่างอยู่ (นัดเจอ/ส่งมอบ/ยืนยันรับของ)
   // ต้อง refresh หน้าเป็นระยะเพื่อดึงสถานะล่าสุด ไม่งั้นต้องกด reload เองถึงจะเห็นการเปลี่ยนแปลง
   const isTerminal =
-    order.status === "completed" || order.status === "disputed" || order.status === "cancelled";
+    order.status === "completed" || order.status === "cancelled";
 
   // อีกฝ่ายอาจกดทำอะไรระหว่างที่เราเปิดหน้านี้ค้างไว้ (ผู้ขายแจ้งส่งมอบ, cron ปิดออเดอร์) เลยต้อง
   // คอยเช็คสถานะ แต่ถามผ่าน endpoint ที่อ่านคอลัมน์เดียวแทนการสั่ง router.refresh() รัวๆ ซึ่งสั่ง
@@ -88,50 +74,31 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
     <div className="flex flex-col gap-3">
       {error && <p className="text-sm text-error-500">{error}</p>}
 
-      {/* รอชำระเงิน */}
-      {order.status === "pending_payment" && role === "buyer" && (
+      {/* จองแล้ว รอเจอกัน */}
+      {(order.status === "reserved" || order.status === "meetup_scheduled") && (
         <>
           <p className="text-sm text-neutral-600">
-            กรุณาชำระเงินเพื่อยืนยันคำสั่งซื้อ (เดโม — ไม่ตัดเงินจริง)
+            {role === "seller"
+              ? "นัดวันเวลากับผู้ซื้อในแชท เจอกันแล้วรับเงินสด/PromptPay ได้เลย แล้วกดปุ่มด้านล่าง"
+              : "นัดวันเวลากับผู้ขายในแชท เจอกันแล้วดูของก่อนจ่ายเงินได้เลย"}
           </p>
-          <Button disabled={loading} onClick={() => run(() => call(`/api/orders/${order.id}/pay`))}>
-            {loading ? "กำลังดำเนินการ..." : "ชำระเงิน (เดโม)"}
-          </Button>
-          <button
-            type="button"
-            className="text-xs text-neutral-400 underline hover:text-error-500"
-            onClick={() => setShowCancelConfirm((v) => !v)}
-          >
-            ยกเลิกคำสั่งซื้อ
-          </button>
-        </>
-      )}
-      {order.status === "pending_payment" && role === "seller" && (
-        <p className="text-sm text-neutral-500">รอผู้ซื้อชำระเงิน</p>
-      )}
-
-      {/* ชำระแล้ว รอส่งมอบ */}
-      {order.status === "paid" && role === "seller" && (
-        <>
-          <p className="text-sm text-neutral-600">เมื่อจัดส่ง/นัดส่งมอบสินค้าแล้ว ให้กดยืนยันด้านล่าง</p>
-          <Button
-            disabled={loading}
-            onClick={() => run(() => call(`/api/orders/${order.id}/mark-delivered`))}
-          >
-            {loading ? "กำลังดำเนินการ..." : "แจ้งส่งมอบสินค้าแล้ว"}
-          </Button>
-        </>
-      )}
-      {order.status === "paid" && role === "buyer" && (
-        <>
-          <p className="text-sm text-neutral-500">รอผู้ขายส่งมอบสินค้า</p>
-          <button
-            type="button"
-            className="text-xs text-neutral-400 underline hover:text-error-500"
-            onClick={() => setShowCancelConfirm((v) => !v)}
-          >
-            ยกเลิกคำสั่งซื้อ
-          </button>
+          {role === "seller" && (
+            <Button
+              disabled={loading}
+              onClick={() => run(() => call(`/api/orders/${order.id}/mark-delivered`))}
+            >
+              {loading ? "กำลังดำเนินการ..." : "ส่งมอบสินค้าแล้ว"}
+            </Button>
+          )}
+          {role === "buyer" && (
+            <button
+              type="button"
+              className="text-xs text-neutral-400 underline hover:text-error-500"
+              onClick={() => setShowCancelConfirm((v) => !v)}
+            >
+              ยกเลิกการจอง
+            </button>
+          )}
         </>
       )}
 
@@ -154,13 +121,9 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
               >
                 {loading ? "กำลังดำเนินการ..." : "ยืนยันได้รับสินค้าแล้ว"}
               </Button>
-              <button
-                type="button"
-                className="text-xs text-neutral-400 underline hover:text-error-500"
-                onClick={() => setShowDisputeForm((v) => !v)}
-              >
-                มีปัญหากับสินค้า? เปิดข้อพิพาท
-              </button>
+              <p className="text-xs text-neutral-400">
+                ของไม่ตรงปกหรือมีปัญหา? คุยกับผู้ขายในแชทก่อน ถ้าไม่จบให้แจ้งทีมผู้ดูแลที่หน้าติดต่อ
+              </p>
             </>
           )}
           {role === "seller" && (
@@ -179,72 +142,19 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
       {/* ปิดการซื้อขายแล้ว */}
       {order.status === "completed" && (
         <>
-          <p className="text-sm text-success-500">✓ ปิดการซื้อขายเรียบร้อย เงินถูกโอนให้ผู้ขายแล้ว (เดโม)</p>
-          {role === "buyer" && canDisputeAfterComplete && (
-            <button
-              type="button"
-              className="text-xs text-neutral-400 underline hover:text-error-500"
-              onClick={() => setShowDisputeForm((v) => !v)}
-            >
-              มีปัญหาหลังปิดออเดอร์? เปิดข้อพิพาทได้ภายใน 2 วัน
-            </button>
-          )}
+          <p className="text-sm text-success-500">✓ ซื้อขายสำเร็จเรียบร้อย</p>
         </>
       )}
 
-      {/* มีข้อพิพาท */}
-      {order.status === "disputed" && (
-        <p className="text-sm text-error-500">
-          อยู่ระหว่างการตรวจสอบโดยแอดมิน กรุณารอการติดต่อกลับ
-        </p>
-      )}
-
-      {/* ยกเลิกแล้ว — อาจมาจากผู้ซื้อกดยกเลิกเอง หรือแอดมินตัดสินข้อพิพาทให้ผู้ซื้อก็ได้ ไม่รู้จาก
-          Order object ตรงนี้ว่าเคยชำระเงินไปก่อนยกเลิกหรือเปล่า (ไม่ได้เก็บ paidAt แยก) เลยใช้
-          ข้อความกลางๆ ไม่ยืนยันว่ามีเงินคืนเสมอไป */}
       {order.status === "cancelled" && (
-        <p className="text-sm text-neutral-500">
-          ออเดอร์นี้ถูกยกเลิกแล้ว ถ้าเคยชำระเงินไปแล้วจะได้รับเงินคืน (เดโม)
-        </p>
-      )}
-
-      {/* ฟอร์มเปิดข้อพิพาท */}
-      {showDisputeForm && (
-        <div className="mt-2 flex flex-col gap-2 rounded-[var(--radius-md)] border border-error-500/30 bg-error-50 p-3">
-          <Textarea
-            label="เหตุผลที่เปิดข้อพิพาท"
-            value={disputeReason}
-            onChange={(e) => setDisputeReason(e.target.value)}
-            rows={3}
-            placeholder="อธิบายปัญหาที่พบ..."
-          />
-          <Button
-            variant="primary"
-            disabled={loading || !disputeReason.trim()}
-            onClick={() =>
-              run(async () => {
-                await call(`/api/orders/${order.id}/dispute`, { reason: disputeReason });
-                setShowDisputeForm(false);
-              })
-            }
-          >
-            ส่งเรื่องข้อพิพาท
-          </Button>
-        </div>
+        <p className="text-sm text-neutral-500">ออเดอร์นี้ถูกยกเลิกแล้ว สินค้ากลับไปขายต่อตามปกติ</p>
       )}
 
       {/* ยืนยันยกเลิกคำสั่งซื้อ — แยกขั้นตอนกันกดพลาด */}
       {showCancelConfirm && (
         <div className="mt-2 flex flex-col gap-2 rounded-[var(--radius-md)] border border-error-500/30 bg-error-50 p-3">
           <p className="text-sm text-neutral-700">
-            ยืนยันยกเลิกคำสั่งซื้อนี้?{" "}
-            {order.status === "paid" &&
-              (order.paidAt
-                ? `เงินที่ชำระเมื่อ ${new Date(order.paidAt).toLocaleString("th-TH", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })} จะคืนให้ (เดโม)`
-                : "เงินที่ชำระไปแล้วจะคืนให้ (เดโม)")}
+            ยืนยันยกเลิกการจองนี้? สินค้าจะกลับไปขายต่อให้คนอื่นทันที
           </p>
           <div className="flex gap-2">
             <Button

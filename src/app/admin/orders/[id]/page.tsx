@@ -4,7 +4,6 @@ import { supabase } from "@/lib/supabase";
 import { mapOrder, mapProduct } from "@/lib/mappers";
 import { Badge } from "@/components/ui/Badge";
 import { ProductGallery } from "@/components/ProductGallery";
-import { DisputeResolutionButtons } from "@/components/DisputeResolutionButtons";
 import { ORDER_STATUS_LABEL } from "@/lib/orderStatus";
 import { CONDITION_LABEL } from "@/lib/categories";
 import { LocationPinIcon } from "@/components/ui/LocationPinIcon";
@@ -33,20 +32,19 @@ export default async function AdminOrderDetailPage({
 
   const timelineRaw: Array<{ label: string; at: string | undefined }> = [
     { label: "สร้างออเดอร์", at: order.createdAt },
-    { label: "ชำระเงิน", at: order.paidAt },
     { label: "ผู้ขายแจ้งส่งมอบ", at: order.sellerMarkedDeliveredAt },
     { label: "ผู้ซื้อยืนยันรับสินค้า", at: order.buyerConfirmedAt },
     { label: "เปิดข้อพิพาท", at: order.disputeOpenedAt },
     { label: "ปิดการขาย", at: order.completedAt },
-    { label: "ยกเลิก/คืนเงิน", at: order.cancelledAt },
+    { label: "ยกเลิก", at: order.cancelledAt },
   ];
   const timeline = timelineRaw.filter((t): t is { label: string; at: string } => Boolean(t.at));
   timeline.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 
   return (
     <div>
-      <Link href="/admin/disputes" className="text-sm text-neutral-500 hover:text-primary-600">
-        ← ข้อพิพาททั้งหมด
+      <Link href="/admin/orders" className="text-sm text-neutral-500 hover:text-primary-600">
+        ← ออเดอร์ทั้งหมด
       </Link>
 
       <div className="mt-3 flex items-start justify-between gap-3">
@@ -115,19 +113,11 @@ export default async function AdminOrderDetailPage({
             </ul>
           </div>
 
+          {/* ข้อพิพาทเลิกใช้แล้วใน flow นัดเจอ — เหลือไว้แสดงของออเดอร์เก่าที่เคยมีเรื่องร้องเรียน */}
           {order.disputeReason && (
             <div className="rounded-[var(--radius-lg)] border border-error-500/30 bg-error-50 p-4">
-              <p className="text-sm font-medium text-error-500">เหตุผลที่เปิดข้อพิพาท</p>
+              <p className="text-sm font-medium text-error-500">เหตุผลที่เปิดข้อพิพาท (ออเดอร์เก่า)</p>
               <p className="mt-1 text-sm text-neutral-700">{order.disputeReason}</p>
-            </div>
-          )}
-
-          {order.status === "disputed" && (
-            <div className="rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-4">
-              <h2 className="text-sm font-medium text-neutral-900">ตัดสินข้อพิพาท</h2>
-              <div className="mt-3">
-                <DisputeResolutionButtons orderId={order.id} />
-              </div>
             </div>
           )}
         </div>

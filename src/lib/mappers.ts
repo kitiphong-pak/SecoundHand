@@ -46,6 +46,8 @@ export function mapOrder(row: Record<string, unknown>): Order {
     sellerMarkedDeliveredAt: (row.seller_marked_delivered_at as string | null) ?? undefined,
     buyerConfirmedAt: (row.buyer_confirmed_at as string | null) ?? undefined,
     completedAt: (row.completed_at as string | null) ?? undefined,
+    cancelReason: (row.cancel_reason as Order["cancelReason"]) ?? undefined,
+    cancelledBy: (row.cancelled_by as string | null) ?? undefined,
     disputeReason: (row.dispute_reason as string | null) ?? undefined,
     disputeOpenedAt: (row.dispute_opened_at as string | null) ?? undefined,
     cancelledAt: (row.cancelled_at as string | null) ?? undefined,

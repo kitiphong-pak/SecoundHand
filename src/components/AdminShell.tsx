@@ -11,14 +11,12 @@ import {
   ShoppingBagIcon,
   MessagesIcon,
   UsersIcon,
-  DisputeIcon,
   ActivityIcon,
   SettingsIcon,
   SignOutIcon,
 } from "@/components/ui/AdminIcons";
 
 interface Badges {
-  openDisputes: number;
   openSupport: number;
 }
 
@@ -43,7 +41,6 @@ const NAV_GROUPS: Array<{ title?: string; links: NavLink[] }> = [
   {
     title: "กำกับดูแล",
     links: [
-      { href: "/admin/disputes", label: "ข้อพิพาท", Icon: DisputeIcon, badgeKey: "openDisputes" },
       { href: "/admin/logs", label: "บันทึกกิจกรรม", Icon: ActivityIcon },
     ],
   },
@@ -56,7 +53,7 @@ const MOBILE_LINKS: NavLink[] = [
   { href: "/admin/products", label: "สินค้า", Icon: ShoppingBagIcon },
   { href: "/admin/messages", label: "ข้อความ", Icon: MessagesIcon, badgeKey: "openSupport" },
   { href: "/admin/users", label: "ผู้ใช้", Icon: UsersIcon },
-  { href: "/admin/disputes", label: "ข้อพิพาท", Icon: DisputeIcon, badgeKey: "openDisputes" },
+  { href: "/admin/logs", label: "บันทึก", Icon: ActivityIcon },
 ];
 
 function isActive(pathname: string, href: string) {
@@ -74,14 +71,14 @@ function BadgeCount({ count }: { count: number }) {
 export function AdminShell({ user, children }: { user: PublicUser; children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [badges, setBadges] = useState<Badges>({ openDisputes: 0, openSupport: 0 });
+  const [badges, setBadges] = useState<Badges>({ openSupport: 0 });
 
   useEffect(() => {
     const load = async () => {
       const res = await fetch("/api/badges");
       if (res.ok) {
         const data = await res.json();
-        setBadges({ openDisputes: data.openDisputes ?? 0, openSupport: data.openSupport ?? 0 });
+        setBadges({ openSupport: data.openSupport ?? 0 });
       }
     };
     // ดึงทันทีตอน mount แล้ว poll ต่อเนื่อง — pattern มาตรฐานสำหรับ polling ฝั่ง client

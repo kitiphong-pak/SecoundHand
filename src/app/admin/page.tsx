@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/Badge";
 import {
   ShoppingBagIcon,
   CheckShieldIcon,
-  DisputeIcon,
   UsersIcon,
   CoinsIcon,
   StarRatingIcon,
@@ -19,11 +18,10 @@ import {
 import type { OrderStatus } from "@/types";
 
 const ORDER_STATUSES: OrderStatus[] = [
-  "pending_payment",
-  "paid",
+  "reserved",
+  "meetup_scheduled",
   "awaiting_buyer_confirmation",
   "completed",
-  "disputed",
   "cancelled",
 ];
 
@@ -144,7 +142,6 @@ export default async function AdminDashboardPage() {
     { data: gmvDailyRows },
     { data: reviewStatsRows },
     { count: overdueBuyerConfirmCount },
-    { count: disputedCount },
     { data: recentOrderRows },
   ] = await Promise.all([
     // ทุก query ที่นับหรือดึงผู้ใช้ต้องตัดบัญชีระบบออก ไม่งั้นสถิติจะเกินจริง 1 ตลอดไป
@@ -172,7 +169,6 @@ export default async function AdminDashboardPage() {
       .select("*", { count: "exact", head: true })
       .eq("status", "awaiting_buyer_confirmation")
       .lt("seller_marked_delivered_at", buyerConfirmCutoff),
-    supabase.from("orders").select("*", { count: "exact", head: true }).eq("status", "disputed"),
     supabase
       .from("orders")
       .select("id, buyer_id, status, amount, created_at, product_id")
@@ -189,6 +185,9 @@ export default async function AdminDashboardPage() {
   }));
   const totalOrders = orderStatusCounts.reduce((sum, s) => sum + s.count, 0);
   const completedOrders = countByStatus.get("completed") ?? 0;
+  // ออเดอร์ที่ยังเดินอยู่ในโลกจริง (จองไว้ / นัดกันแล้ว) — นับจากผลที่ดึงมาแล้ว ไม่ต้องยิง query เพิ่ม
+  const openMeetupOrders =
+    (countByStatus.get("reserved") ?? 0) + (countByStatus.get("meetup_scheduled") ?? 0);
 
   const gmv = Number(gmvTotalRow ?? 0);
   const reviewStats = reviewStatsRows?.[0];
@@ -215,7 +214,7 @@ export default async function AdminDashboardPage() {
     return { label, value: newUsersByDay.get(key) ?? 0 };
   });
 
-  const hasUrgent = (disputedCount ?? 0) > 0 || (overdueBuyerConfirmCount ?? 0) > 0;
+  const hasUrgent = (overdueBuyerConfirmCount ?? 0) > 0;
 
   // เตรียมข้อมูลตาราง "ออเดอร์ล่าสุด" — ต้อง resolve ชื่อผู้ซื้อ + ชื่อสินค้าจาก id แยกต่างหาก
   const recentOrders = (recentOrderRows ?? []) as RecentOrderRow[];
@@ -239,14 +238,6 @@ export default async function AdminDashboardPage() {
       </h1>
 
       <section className="flex flex-col gap-2">
-        {(disputedCount ?? 0) > 0 && (
-          <AlertBanner
-            tone="critical"
-            title={`${disputedCount} ข้อพิพาทรอตรวจสอบ`}
-            description="ผู้ซื้อเปิดข้อพิพาทและกำลังรอแอดมินตัดสิน"
-            href="/admin/disputes"
-          />
-        )}
         {(overdueBuyerConfirmCount ?? 0) > 0 && (
           <AlertBanner
             tone="warning"
@@ -265,7 +256,7 @@ export default async function AdminDashboardPage() {
         <KpiCard label="ผู้ใช้ใหม่ (14 วัน)" value={(newUserRows ?? []).length} Icon={UsersIcon} tone="primary" />
         <KpiCard label="ออเดอร์ใหม่ (14 วัน)" value={(newOrderRows ?? []).length} Icon={ShoppingBagIcon} tone="info" />
         <KpiCard label="ยืนยันตัวตนแล้ว" value={verifiedUsers ?? 0} Icon={CheckShieldIcon} tone="success" />
-        <KpiCard label="ข้อพิพาทค้าง" value={disputedCount ?? 0} Icon={DisputeIcon} tone="error" />
+        <KpiCard label="กำลังนัดเจอกัน" value={openMeetupOrders} Icon={ShoppingBagIcon} tone="info" />
       </section>
 
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-2">

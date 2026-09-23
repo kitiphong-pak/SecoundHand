@@ -34,14 +34,24 @@ export interface Product {
   createdAt: string;
 }
 
-// สถานะออเดอร์ตาม flow ยืนยันปิดการซื้อขายแบบ dual-confirmation + OTP
+// สถานะออเดอร์ของ flow นัดเจอ — เงินไม่ผ่านระบบ ผู้ซื้อจ่ายเองตอนเจอกัน
 export type OrderStatus =
-  | "pending_payment" // รอผู้ซื้อชำระเงิน (demo)
-  | "paid" // ชำระเงินแล้ว รอผู้ขายส่งมอบ
-  | "awaiting_buyer_confirmation" // ผู้ขายแจ้งส่งมอบแล้ว กำลังนับเวลารอผู้ซื้อยืนยัน
-  | "completed" // ปิดการซื้อขาย ปล่อยเงินให้ผู้ขายแล้ว (กรอก OTP ถูก หรือ auto-complete)
-  | "disputed" // มีข้อพิพาท รอแอดมินตัดสิน
-  | "cancelled"; // แอดมินตัดสินข้อพิพาทให้ฝั่งผู้ซื้อ ถือว่ายกเลิก/คืนเงิน (เดโม)
+  | "reserved" // จองไว้แล้ว รอนัดเจอกัน (หมดอายุเองถ้าไม่มีใครขยับ)
+  | "meetup_scheduled" // นัดวันเวลากันแล้ว (ใช้เต็มรูปแบบใน 1d)
+  | "awaiting_buyer_confirmation" // ผู้ขายกดส่งมอบแล้ว รอผู้ซื้อกดยืนยันปิดดีล
+  | "completed" // ซื้อขายจบ
+  | "cancelled"; // ยกเลิก — ดูสาเหตุที่ cancelReason
+
+/** เหตุผลที่ออเดอร์ถูกยกเลิก (ต้องตรงกับ check constraint ใน migration 020) */
+export type OrderCancelReason =
+  | "expired"
+  | "buyer_cancelled"
+  | "seller_cancelled"
+  | "late_cancel"
+  | "no_show_buyer"
+  | "no_show_seller"
+  | "item_mismatch"
+  | "admin";
 
 export interface Order {
   id: string;
@@ -56,7 +66,9 @@ export interface Order {
   completedAt?: string;
   disputeReason?: string;
   disputeOpenedAt?: string;
-  cancelledAt?: string; // แอดมินตัดสินให้ฝั่งผู้ซื้อ
+  cancelReason?: OrderCancelReason;
+  cancelledBy?: string;
+  cancelledAt?: string; //
   createdAt: string;
 }
 

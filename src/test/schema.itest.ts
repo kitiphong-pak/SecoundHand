@@ -98,7 +98,7 @@ describe("ไฟล์ migration", () => {
     }
   });
 
-  it("รับสถานะใหม่ (reserved, meetup_scheduled) และยังรับสถานะเดิมระหว่างเปลี่ยนผ่าน", async () => {
+  it("รับเฉพาะสถานะของ flow ใหม่ สถานะที่เลิกใช้แล้วต้องเขียนลงไม่ได้", async () => {
     await db.truncateAll();
     const [seller] = await q<{ id: string }>(
       `insert into users (name, email, province) values ('ผู้ขาย','s@x.com','เชียงใหม่') returning id`
@@ -115,7 +115,13 @@ describe("ไฟล์ migration", () => {
       return p.id;
     };
 
-    for (const status of ["reserved", "meetup_scheduled", "pending_payment", "completed"]) {
+    for (const status of [
+      "reserved",
+      "meetup_scheduled",
+      "awaiting_buyer_confirmation",
+      "completed",
+      "cancelled",
+    ]) {
       await expect(
         q(`insert into orders (product_id, buyer_id, seller_id, status, amount) values ($1,$2,$3,$4,100)`, [
           await newProduct(),
@@ -124,6 +130,19 @@ describe("ไฟล์ migration", () => {
           status,
         ])
       ).resolves.toBeDefined();
+    }
+
+    // สถานะของ flow เก่า (มีเงินผ่านระบบ + OTP + ข้อพิพาท) ต้องเขียนลงไม่ได้อีกแล้ว ไม่งั้นโค้ดเก่า
+    // ที่หลงเหลืออยู่จะพาออเดอร์ไปติดอยู่ในสถานะที่ไม่มีหน้าจอไหนพาต่อได้
+    for (const status of ["pending_payment", "paid", "awaiting_otp_entry", "disputed"]) {
+      await expect(
+        q(`insert into orders (product_id, buyer_id, seller_id, status, amount) values ($1,$2,$3,$4,100)`, [
+          await newProduct(),
+          buyer.id,
+          seller.id,
+          status,
+        ])
+      ).rejects.toThrow();
     }
 
     // สถานะที่ไม่รู้จักต้องถูกปฏิเสธที่ฐานข้อมูล ไม่ใช่รอให้โค้ดเช็คเอง
@@ -242,14 +261,14 @@ describe("index กันขายสินค้าชิ้นเดียว�
     );
 
     await q(
-      `insert into orders (product_id, buyer_id, seller_id, status, amount) values ($1,$2,$3,'pending_payment',3500)`,
+      `insert into orders (product_id, buyer_id, seller_id, status, amount) values ($1,$2,$3,'reserved',3500)`,
       [product.id, buyerA.id, seller.id]
     );
 
     // ใบที่สองต้องถูกฐานข้อมูลปฏิเสธ ต่อให้โค้ดฝั่งแอปพลาดปล่อยผ่านมาถึงตรงนี้
     await expect(
       q(
-        `insert into orders (product_id, buyer_id, seller_id, status, amount) values ($1,$2,$3,'pending_payment',3500)`,
+        `insert into orders (product_id, buyer_id, seller_id, status, amount) values ($1,$2,$3,'reserved',3500)`,
         [product.id, buyerB.id, seller.id]
       )
     ).rejects.toThrow();
@@ -275,7 +294,7 @@ describe("index กันขายสินค้าชิ้นเดียว�
 
     await expect(
       q(
-        `insert into orders (product_id, buyer_id, seller_id, status, amount) values ($1,$2,$3,'pending_payment',3500)`,
+        `insert into orders (product_id, buyer_id, seller_id, status, amount) values ($1,$2,$3,'reserved',3500)`,
         [product.id, buyer.id, seller.id]
       )
     ).resolves.toBeDefined();

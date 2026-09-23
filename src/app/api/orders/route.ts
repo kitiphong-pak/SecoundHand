@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { mapProduct, mapOrder, mapOffer } from "@/lib/mappers";
 import { logAction } from "@/lib/auditLog";
+import { MAX_OPEN_RESERVATIONS_PER_BUYER } from "@/lib/orderFlowConfig";
 
 export async function POST(req: Request) {
   const user = await getCurrentUser();
@@ -25,6 +26,22 @@ export async function POST(req: Request) {
   const product = mapProduct(productRow);
   if (product.sellerId === user.id) {
     return NextResponse.json({ error: "ไม่สามารถซื้อสินค้าของตัวเองได้" }, { status: 400 });
+  }
+
+  // การจองไม่มีค่าใช้จ่ายและยกเลิกฟรี ถ้าไม่จำกัดจำนวน คนเดียวกดจองล็อกสินค้าทั้งหมวดไว้ได้
+  // ทีละ 24 ชม. โดยไม่ตั้งใจจะซื้อจริงเลยสักชิ้น — คนขายเสียโอกาสขายฟรีๆ
+  const { count: openReservations } = await supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("buyer_id", user.id)
+    .not("status", "in", "(completed,cancelled)");
+  if ((openReservations ?? 0) >= MAX_OPEN_RESERVATIONS_PER_BUYER) {
+    return NextResponse.json(
+      {
+        error: `จองพร้อมกันได้สูงสุด ${MAX_OPEN_RESERVATIONS_PER_BUYER} ชิ้น กรุณาปิดหรือยกเลิกรายการที่ค้างอยู่ก่อน`,
+      },
+      { status: 409 }
+    );
   }
 
   // ราคาสั่งซื้อ: ปกติใช้ราคาที่ตั้งไว้ตอนลงขาย แต่ถ้ามาจากการกดซื้อหลังต่อรองราคาสำเร็จ (มี
@@ -71,7 +88,7 @@ export async function POST(req: Request) {
       product_id: product.id,
       buyer_id: user.id,
       seller_id: product.sellerId,
-      status: "pending_payment",
+      status: "reserved",
       amount,
     })
     .select()

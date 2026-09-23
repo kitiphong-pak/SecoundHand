@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createSupabaseMock, hasOp } from "@/test/supabaseMock";
 
-// state machine ของออเดอร์ — pending_payment → paid → awaiting_buyer_confirmation
-//                            → completed (แยกไป cancelled/disputed ได้)
+// state machine ของออเดอร์ (flow นัดเจอ) — reserved → awaiting_buyer_confirmation → completed
+//                                          (แยกไป cancelled ได้ระหว่างทาง)
 //
 // สิ่งที่เทสชุดนี้เฝ้าคือ "compare-and-swap": ทุกคำสั่งเปลี่ยนสถานะต้องแนบเงื่อนไขสถานะเดิม
 // ไปกับ UPDATE ด้วยเสมอ ไม่ใช่แค่เช็คใน JS แล้วค่อยเขียน เพราะระหว่างสองบรรทัดนั้นมีช่องให้
@@ -32,16 +32,13 @@ vi.mock("@/lib/orderCompletion", async () => {
   };
 });
 
-const { POST: pay } = await import("./pay/route");
 const { POST: cancel } = await import("./cancel/route");
 const { POST: markDelivered } = await import("./mark-delivered/route");
 const { POST: confirmReceipt } = await import("./confirm-receipt/route");
-const { POST: openDispute } = await import("./dispute/route");
 const { OrderStateConflictError } = await import("@/lib/orderCompletion");
 
 const BUYER = { id: "buyer-1", role: "user", name: "ผู้ซื้อ" };
 const SELLER = { id: "seller-1", role: "user", name: "ผู้ขาย" };
-const OUTSIDER = { id: "stranger-1", role: "user", name: "คนนอก" };
 
 const order = (status: string) => ({
   id: "order-1",
@@ -61,56 +58,12 @@ beforeEach(() => {
   mockUser.current = BUYER;
 });
 
-describe("ชำระเงิน (pending_payment → paid)", () => {
-  it("ผู้ซื้อชำระเงินได้ และ UPDATE ต้องมีเงื่อนไขสถานะเดิมกำกับ", async () => {
-    mock.current!.queueResult({ data: order("pending_payment"), error: null });
-    mock.current!.queueResult({ data: order("paid"), error: null });
-
-    const res = await pay(req(), params);
-    expect(res.status).toBe(200);
-
-    const update = mock.current!.callsTo("orders")[1];
-    const payload = update.ops.find(([m]) => m === "update")?.[1] as Record<string, unknown>;
-    expect(payload.status).toBe("paid");
-    // ต้องบันทึกเวลาชำระเงินไปพร้อมกันใน UPDATE เดียว ไม่ใช่เขียนตามทีหลังคนละคำสั่ง
-    expect(Number.isFinite(Date.parse(String(payload.paid_at)))).toBe(true);
-    expect(hasOp(update, "eq", "status", "pending_payment")).toBe(true);
-  });
-
-  it("กดชำระซ้ำสองครั้งพร้อมกัน ครั้งที่แพ้ต้องได้ 409 ไม่ใช่สำเร็จเงียบๆ", async () => {
-    mock.current!.queueResult({ data: order("pending_payment"), error: null }); // อ่านตอนยังไม่จ่าย
-    mock.current!.queueResult({ data: null, error: null }); // แต่ UPDATE ไม่โดนแถว มีคนจ่ายตัดหน้าไปแล้ว
-
-    const res = await pay(req(), params);
-    expect(res.status).toBe(409);
-  });
-
-  it("คนอื่นที่ไม่ใช่ผู้ซื้อ จ่ายเงินแทนไม่ได้ → 403 และต้องไม่มีการเขียนใดๆ", async () => {
-    mockUser.current = OUTSIDER;
-    mock.current!.queueResult({ data: order("pending_payment"), error: null });
-
-    const res = await pay(req(), params);
-    expect(res.status).toBe(403);
-    expect(mock.current!.callsTo("orders")).toHaveLength(1); // อ่านอย่างเดียว
-  });
-
-  it("ออเดอร์ที่จ่ายแล้ว จ่ายซ้ำไม่ได้ → 409", async () => {
-    mock.current!.queueResult({ data: order("paid"), error: null });
-    const res = await pay(req(), params);
-    expect(res.status).toBe(409);
-    expect(mock.current!.callsTo("orders")).toHaveLength(1);
-  });
-
-  it("ไม่ได้เข้าสู่ระบบ → 401", async () => {
-    mockUser.current = null;
-    expect((await pay(req(), params)).status).toBe(401);
-    expect(mock.current!.calls).toHaveLength(0);
-  });
-});
+const updateOf = (call: ReturnType<typeof createSupabaseMock>["calls"][number]) =>
+  call.ops.find(([m]) => m === "update")?.[1] as Record<string, unknown>;
 
 describe("ยกเลิกออเดอร์", () => {
-  it("ยกเลิกได้เฉพาะก่อนผู้ขายเริ่มส่งมอบ และต้องล็อกสถานะที่ยอมรับไว้ใน UPDATE", async () => {
-    mock.current!.queueResult({ data: order("paid"), error: null });
+  it("ยกเลิกการจองได้ก่อนผู้ขายกดส่งมอบ และต้องล็อกสถานะที่ยอมรับไว้ใน UPDATE", async () => {
+    mock.current!.queueResult({ data: order("reserved"), error: null });
     mock.current!.queueResult({ data: order("cancelled"), error: null });
     mock.current!.queueResult({ data: null, error: null }); // คืนสินค้ากลับเป็น listed
 
@@ -118,11 +71,22 @@ describe("ยกเลิกออเดอร์", () => {
     expect(res.status).toBe(200);
 
     const update = mock.current!.callsTo("orders")[1];
-    expect(hasOp(update, "in", "status", ["pending_payment", "paid"])).toBe(true);
+    expect(hasOp(update, "in", "status", ["reserved", "meetup_scheduled"])).toBe(true);
+  });
+
+  it("ยกเลิกแล้วต้องบันทึกว่าใครยกเลิกและเพราะอะไร (Phase 2 เอาไปคิดคะแนน)", async () => {
+    mock.current!.queueResult({ data: order("reserved"), error: null });
+    mock.current!.queueResult({ data: order("cancelled"), error: null });
+    mock.current!.queueResult({ data: null, error: null });
+
+    await cancel(req(), params);
+    const payload = updateOf(mock.current!.callsTo("orders")[1]);
+    expect(payload.cancel_reason).toBe("buyer_cancelled");
+    expect(payload.cancelled_by).toBe(BUYER.id);
   });
 
   it("ยกเลิกสำเร็จต้องปล่อยสินค้ากลับมาขายต่อได้ ไม่ค้างสถานะ reserved", async () => {
-    mock.current!.queueResult({ data: order("paid"), error: null });
+    mock.current!.queueResult({ data: order("reserved"), error: null });
     mock.current!.queueResult({ data: order("cancelled"), error: null });
     mock.current!.queueResult({ data: null, error: null });
 
@@ -135,7 +99,7 @@ describe("ยกเลิกออเดอร์", () => {
   });
 
   it("ผู้ขายกดแจ้งส่งมอบตัดหน้าพอดี ผู้ซื้อยกเลิกไม่ได้ → 409 และสินค้าต้องไม่ถูกปล่อยคืน", async () => {
-    mock.current!.queueResult({ data: order("paid"), error: null }); // ตอนอ่านยังยกเลิกได้อยู่
+    mock.current!.queueResult({ data: order("reserved"), error: null }); // ตอนอ่านยังยกเลิกได้อยู่
     mock.current!.queueResult({ data: null, error: null }); // แต่ UPDATE ไม่โดนแถว สถานะเปลี่ยนไปแล้ว
 
     const res = await cancel(req(), params);
@@ -147,14 +111,14 @@ describe("ยกเลิกออเดอร์", () => {
 
   it("ผู้ขายยกเลิกออเดอร์ของผู้ซื้อไม่ได้ → 403", async () => {
     mockUser.current = SELLER;
-    mock.current!.queueResult({ data: order("paid"), error: null });
+    mock.current!.queueResult({ data: order("reserved"), error: null });
 
     const res = await cancel(req(), params);
     expect(res.status).toBe(403);
     expect(mock.current!.callsTo("orders")).toHaveLength(1);
   });
 
-  it("เลยขั้นส่งมอบไปแล้วยกเลิกไม่ได้ ต้องไปใช้ระบบข้อพิพาทแทน → 409", async () => {
+  it("ผู้ขายกดส่งมอบไปแล้วยกเลิกไม่ได้ → 409", async () => {
     for (const status of ["awaiting_buyer_confirmation", "completed"]) {
       mock.current = createSupabaseMock();
       mock.current.queueResult({ data: order(status), error: null });
@@ -166,23 +130,13 @@ describe("ยกเลิกออเดอร์", () => {
   });
 });
 
-const reqJson = (body: unknown) =>
-  new Request("http://localhost/api/orders/order-1/x", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-const updateOf = (call: ReturnType<typeof createSupabaseMock>["calls"][number]) =>
-  call.ops.find(([m]) => m === "update")?.[1] as Record<string, unknown>;
-
-describe("ผู้ขายแจ้งส่งมอบ (paid → awaiting_buyer_confirmation)", () => {
+describe("ผู้ขายกดส่งมอบ (reserved → awaiting_buyer_confirmation)", () => {
   beforeEach(() => {
     mockUser.current = SELLER;
   });
 
   it("ผู้ขายแจ้งได้ บันทึกเวลา และล็อกสถานะเดิมไว้ใน UPDATE", async () => {
-    mock.current!.queueResult({ data: order("paid"), error: null });
+    mock.current!.queueResult({ data: order("reserved"), error: null });
     mock.current!.queueResult({ data: order("awaiting_buyer_confirmation"), error: null });
 
     const res = await markDelivered(req(), params);
@@ -191,24 +145,24 @@ describe("ผู้ขายแจ้งส่งมอบ (paid → awaiting_bu
     const update = mock.current!.callsTo("orders")[1];
     expect(updateOf(update).status).toBe("awaiting_buyer_confirmation");
     expect(Number.isFinite(Date.parse(String(updateOf(update).seller_marked_delivered_at)))).toBe(true);
-    expect(hasOp(update, "eq", "status", "paid")).toBe(true);
+    expect(hasOp(update, "in", "status", ["reserved", "meetup_scheduled"])).toBe(true);
   });
 
   it("ผู้ซื้อแจ้งส่งมอบแทนผู้ขายไม่ได้ → 403", async () => {
     mockUser.current = BUYER;
-    mock.current!.queueResult({ data: order("paid"), error: null });
+    mock.current!.queueResult({ data: order("reserved"), error: null });
     expect((await markDelivered(req(), params)).status).toBe(403);
     expect(mock.current!.callsTo("orders")).toHaveLength(1);
   });
 
-  it("ยังไม่ชำระเงินก็แจ้งส่งมอบไม่ได้ → 409", async () => {
-    mock.current!.queueResult({ data: order("pending_payment"), error: null });
+  it("ออเดอร์ที่จบไปแล้ว กดส่งมอบซ้ำไม่ได้ → 409", async () => {
+    mock.current!.queueResult({ data: order("completed"), error: null });
     expect((await markDelivered(req(), params)).status).toBe(409);
     expect(mock.current!.callsTo("orders")).toHaveLength(1);
   });
 
   it("ผู้ซื้อยกเลิกตัดหน้าพอดี → 409 ไม่ใช่สำเร็จเงียบๆ", async () => {
-    mock.current!.queueResult({ data: order("paid"), error: null });
+    mock.current!.queueResult({ data: order("reserved"), error: null });
     mock.current!.queueResult({ data: null, error: null });
     expect((await markDelivered(req(), params)).status).toBe(409);
   });
@@ -255,54 +209,3 @@ describe("ผู้ซื้อยืนยันรับของ (awaiting_bu
   });
 });
 
-describe("เปิดข้อพิพาท", () => {
-  it("ผู้ซื้อเปิดได้ระหว่างรอยืนยัน และล็อกสถานะที่ยอมรับไว้ใน UPDATE", async () => {
-    mock.current!.queueResult({ data: order("awaiting_buyer_confirmation"), error: null });
-    mock.current!.queueResult({ data: order("disputed"), error: null });
-
-    expect((await openDispute(reqJson({ reason: "ของไม่ตรงปก" }), params)).status).toBe(200);
-
-    const update = mock.current!.callsTo("orders")[1];
-    expect(updateOf(update).dispute_reason).toBe("ของไม่ตรงปก");
-    expect(
-      hasOp(update, "in", "status", ["completed", "awaiting_buyer_confirmation"])
-    ).toBe(true);
-  });
-
-  it("ปิดออเดอร์ไปแล้วแต่ยังไม่เกินระยะผ่อนผัน ก็ยังเปิดได้", async () => {
-    mock.current!.queueResult({
-      data: { ...order("completed"), completed_at: new Date(Date.now() - 60_000).toISOString() },
-      error: null,
-    });
-    mock.current!.queueResult({ data: order("disputed"), error: null });
-    expect((await openDispute(reqJson({ reason: "ของเสีย" }), params)).status).toBe(200);
-  });
-
-  it("เกินระยะผ่อนผันหลังปิดออเดอร์ → 410", async () => {
-    mock.current!.queueResult({
-      data: {
-        ...order("completed"),
-        completed_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      error: null,
-    });
-    expect((await openDispute(reqJson({ reason: "ของเสีย" }), params)).status).toBe(410);
-    expect(mock.current!.callsTo("orders")).toHaveLength(1);
-  });
-
-  it("ยังไม่ถึงขั้นส่งมอบก็เปิดข้อพิพาทไม่ได้ → 409", async () => {
-    mock.current!.queueResult({ data: order("pending_payment"), error: null });
-    expect((await openDispute(reqJson({ reason: "x" }), params)).status).toBe(409);
-  });
-
-  it("ผู้ขายเปิดข้อพิพาทไม่ได้ → 403", async () => {
-    mockUser.current = SELLER;
-    mock.current!.queueResult({ data: order("awaiting_buyer_confirmation"), error: null });
-    expect((await openDispute(reqJson({ reason: "x" }), params)).status).toBe(403);
-  });
-
-  it("ไม่กรอกเหตุผล → 400 และไม่แตะฐานข้อมูล", async () => {
-    expect((await openDispute(reqJson({ reason: "   " }), params)).status).toBe(400);
-    expect(mock.current!.calls).toHaveLength(0);
-  });
-});

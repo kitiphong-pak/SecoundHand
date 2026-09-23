@@ -79,7 +79,7 @@ export default async function MyListingsPage() {
             {products.map((product) => {
               const badge =
                 product.status === "reserved"
-                  ? orderStatusBadge(statusByProduct.get(product.id) ?? "pending_payment", "seller")
+                  ? orderStatusBadge(statusByProduct.get(product.id) ?? "reserved", "seller")
                   : PRODUCT_STATUS_BADGE[product.status];
               return (
                 <div

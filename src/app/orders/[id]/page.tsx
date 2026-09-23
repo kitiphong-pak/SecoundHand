@@ -81,13 +81,6 @@ export default async function OrderDetailPage({
             </span>
           </div>
 
-          {order.status === "disputed" && order.disputeReason && (
-            <div className="mt-4 rounded-[var(--radius-md)] bg-error-50 p-3 text-sm text-error-500">
-              <p className="font-medium">เหตุผลข้อพิพาท</p>
-              <p className="mt-1">{order.disputeReason}</p>
-            </div>
-          )}
-
           <div className="mt-5 border-t border-neutral-100 pt-5">
             <OrderActions order={order} role={role} />
           </div>

@@ -19,21 +19,25 @@ export async function POST(
   if (order.buyerId !== user.id) {
     return NextResponse.json({ error: "เฉพาะผู้ซื้อเท่านั้นที่ยกเลิกออเดอร์นี้ได้" }, { status: 403 });
   }
-  // ยกเลิกเองได้แค่ก่อนผู้ขายเริ่มส่งมอบ — หลังจากนั้นของอาจอยู่ระหว่างขนส่งแล้ว ให้ใช้ระบบ
-  // ข้อพิพาทแทน (เปิดได้ตั้งแต่ awaiting_buyer_confirmation เป็นต้นไป)
-  if (order.status !== "pending_payment" && order.status !== "paid") {
+  // ยกเลิกเองได้ก่อนผู้ขายกดส่งมอบเท่านั้น — หลังจากนั้นถือว่าเจอกันแล้ว ให้ปิดดีลหรือคุยกันในแชท
+  if (order.status !== "reserved" && order.status !== "meetup_scheduled") {
     return NextResponse.json(
-      { error: "ไม่สามารถยกเลิกออเดอร์นี้ได้แล้ว (ผู้ขายเริ่มดำเนินการส่งมอบแล้ว)" },
+      { error: "ไม่สามารถยกเลิกออเดอร์นี้ได้แล้ว (ผู้ขายกดส่งมอบแล้ว)" },
       { status: 409 }
     );
   }
 
   const { data: updated, error } = await supabase
     .from("orders")
-    .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
+    .update({
+      status: "cancelled",
+      cancelled_at: new Date().toISOString(),
+      cancelled_by: user.id,
+      cancel_reason: "buyer_cancelled",
+    })
     .eq("id", id)
     // กัน request ซ้อน เช่นผู้ขายเพิ่งกดแจ้งส่งมอบไปพอดีตอนผู้ซื้อกดยกเลิก
-    .in("status", ["pending_payment", "paid"])
+    .in("status", ["reserved", "meetup_scheduled"])
     .select()
     .maybeSingle();
   if (error) return NextResponse.json({ error: "ยกเลิกไม่สำเร็จ" }, { status: 500 });

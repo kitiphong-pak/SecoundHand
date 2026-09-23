@@ -19,7 +19,7 @@ export async function POST(
   if (order.sellerId !== user.id) {
     return NextResponse.json({ error: "ไม่มีสิทธิ์ทำรายการนี้" }, { status: 403 });
   }
-  if (order.status !== "paid") {
+  if (order.status !== "reserved" && order.status !== "meetup_scheduled") {
     return NextResponse.json({ error: "ออเดอร์นี้ยังไม่พร้อมแจ้งส่งมอบ" }, { status: 409 });
   }
 
@@ -30,7 +30,8 @@ export async function POST(
       seller_marked_delivered_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("status", "paid") // กัน request ซ้อนแจ้งส่งมอบซ้ำถ้าสถานะเปลี่ยนไปแล้ว
+    // กัน request ซ้อน เช่นผู้ซื้อเพิ่งกดยกเลิกไปพอดีตอนผู้ขายกดส่งมอบ
+    .in("status", ["reserved", "meetup_scheduled"])
     .select()
     .maybeSingle();
   if (error) return NextResponse.json({ error: "ทำรายการไม่สำเร็จ" }, { status: 500 });

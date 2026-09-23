@@ -20,6 +20,7 @@ export type AuditAction =
   | "order.resolved_favor_seller"
   | "order.resolved_favor_buyer"
   | "order.cancelled_by_buyer"
+  | "order.reservation_expired"
   | "review.created";
 
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
@@ -42,6 +43,7 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   "order.resolved_favor_seller": "แอดมินตัดสินให้ผู้ขาย",
   "order.resolved_favor_buyer": "แอดมินตัดสินให้ผู้ซื้อ",
   "order.cancelled_by_buyer": "ผู้ซื้อยกเลิกออเดอร์",
+  "order.reservation_expired": "การจองหมดอายุ ระบบยกเลิกให้",
   "review.created": "ส่งรีวิว",
 };
 
