@@ -8,6 +8,8 @@ export interface TimeSuggestion {
   at: Date;
   /** ส่วนของข้อความที่อ่านมา ไว้โชว์ให้เห็นว่าระบบอ่านมาจากตรงไหน */
   matched: string;
+  /** true = ผู้ใช้บอกแค่ช่วงกว้างๆ ("บ่าย") ระบบเดาเวลาให้ — หน้าจอต้องบอกว่าเป็นการเดา */
+  approximate: boolean;
   messageId: string;
 }
 
@@ -33,7 +35,12 @@ export function findTimeSuggestion(
     if (m.meetupProposalId || m.offerId) continue;
     const parsed = parseThaiTime(m.text);
     if (!parsed) continue;
-    return { at: resolveMeetupAt(parsed, now), matched: parsed.matched, messageId: m.id };
+    return {
+      at: resolveMeetupAt(parsed, now),
+      matched: parsed.matched,
+      approximate: parsed.approximate,
+      messageId: m.id,
+    };
   }
   return null;
 }

@@ -487,8 +487,12 @@ export function ChatThread({
           เป็นคนยืนยันว่าอ่านถูก ("ห้าโมง" = 17:00 แต่ "ห้าโมงเช้า" = 11:00) */}
       {showTimeChip && detectedTime && (
         <div className="flex flex-wrap items-center gap-2 border-t border-neutral-100 bg-brand-surface px-3 py-2 text-xs">
+          {/* คำกว้างๆ อย่าง "บ่าย" ระบบเดาเวลากลางๆ ให้ ต้องเขียนให้เห็นว่าเดา ไม่ใช่เวลาที่ผู้ใช้
+              ระบุเอง ไม่งั้นคนกดยืนยันผ่านๆ แล้วได้นัดบ่ายสองทั้งที่ตั้งใจบอกแค่ "ช่วงบ่ายก็ได้" */}
           <span className="text-neutral-600">
-            จากที่คุยกัน (&ldquo;{detectedTime.matched}&rdquo;) = {formatMeetupAt(detectedTime.at.toISOString())} น.
+            จากที่คุยกัน (&ldquo;{detectedTime.matched}&rdquo;){" "}
+            {detectedTime.approximate ? "น่าจะราวๆ" : "="}{" "}
+            {formatMeetupAt(detectedTime.at.toISOString())} น.
           </span>
           <button
             type="button"

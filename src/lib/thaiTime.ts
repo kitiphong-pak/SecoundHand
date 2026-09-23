@@ -24,6 +24,13 @@ export interface ParsedThaiTime {
   weekday: number | null;
   /** ส่วนของข้อความที่อ่านมา ไว้โชว์ให้ผู้ใช้เห็นว่าระบบอ่านมาจากตรงไหน */
   matched: string;
+  /**
+   * true = ผู้ใช้บอกแค่ช่วงกว้างๆ ("บ่าย", "เย็น") ระบบเดาเวลากลางๆ ของช่วงนั้นให้
+   *
+   * ฝั่งหน้าจอต้องบอกให้เห็นว่าเป็นการเดา ไม่ใช่เวลาที่ผู้ใช้ระบุ ไม่งั้นคนจะกดยืนยันผ่านๆ
+   * แล้วได้นัดบ่ายสองทั้งที่ตั้งใจจะบอกแค่ว่า "ช่วงบ่ายก็ได้"
+   */
+  approximate: boolean;
 }
 
 // ตัวเลขที่คนพิมพ์เป็นตัวหนังสือ ใช้บ่อยพอๆ กับตัวเลขอารบิกในแชทไทย
@@ -94,6 +101,23 @@ const PATTERNS: Array<{ re: RegExp; hour: (n: number) => number | null }> = [
 // เป็นเวลา และต้องไม่มีตัวเลข/จุลภาคขนาบอยู่ ไม่งั้นราคาอย่าง "1,250.50" จะถูกอ่านเป็นเวลา
 const CLOCK_RE = /(?<![\d,.])(\d{1,2})[:.](\d{2})(?![\d])/;
 
+// ช่วงเวลากว้างๆ ที่คนพูดกันโดยไม่ระบุตัวเลข ("เจอกันบ่ายได้มั้ย") — เดาเวลากลางๆ ของช่วงนั้นให้
+// แล้วติดธง approximate ไว้ ฝั่งหน้าจอจะได้บอกว่าเป็นการเดา ไม่ใช่เวลาที่ผู้ใช้ระบุเอง
+//
+// ตรวจทีหลังรูปแบบที่มีตัวเลขเสมอ — "บ่าย 3 โมง" ต้องได้ 15:00 ไม่ใช่ 14:00 ที่เดาจากคำว่า "บ่าย"
+//
+// คำพวกนี้เสี่ยงชนกับชื่อสินค้าในเว็บขายของมือสอง จึงต้องกันไว้ด้วย:
+// - "ตู้เย็น" / "น้ำเย็น" ไม่ใช่การนัดตอนเย็น
+// - "สาย" ตัดทิ้งไปเลย เพราะ "สายชาร์จ" "สายไฟ" เจอบ่อยกว่าคำว่าสาย(ตอนเช้า)มาก
+const PERIODS: Array<{ re: RegExp; hour: number }> = [
+  { re: /เช้า/, hour: 9 },
+  { re: /บ่าย/, hour: 14 },
+  { re: /(?<!ตู้|น้ำ)เย็น/, hour: 17 },
+  { re: /ค่ำ/, hour: 19 },
+  { re: /คืนนี้|กลางคืน/, hour: 20 },
+  { re: /ดึก/, hour: 22 },
+];
+
 const findDay = (text: string): { dayOffset: number | null; weekday: number | null } => {
   if (/มะรืน/.test(text)) return { dayOffset: 2, weekday: null };
   if (/พรุ่งนี้|พรุ้งนี้/.test(text)) return { dayOffset: 1, weekday: null };
@@ -114,7 +138,13 @@ export function parseThaiTime(text: string): ParsedThaiTime | null {
     // กลุ่มแรกของบางรูปแบบไม่ใช่ตัวเลข (เช่น "เที่ยงวัน") — ฟังก์ชัน hour ของรูปแบบนั้นไม่ได้ใช้ค่านี้อยู่แล้ว
     const h = hour(m[1] ? toNumber(m[1]) : NaN);
     if (h === null || h === undefined || Number.isNaN(h)) continue;
-    return { hour: h % 24, minute: /ครึ่ง/.test(m[0]) ? 30 : 0, matched: m[0].trim(), ...day };
+    return {
+      hour: h % 24,
+      minute: /ครึ่ง/.test(m[0]) ? 30 : 0,
+      matched: m[0].trim(),
+      approximate: false,
+      ...day,
+    };
   }
 
   const clock = CLOCK_RE.exec(text);
@@ -122,8 +152,14 @@ export function parseThaiTime(text: string): ParsedThaiTime | null {
     const h = Number(clock[1]);
     const min = Number(clock[2]);
     if (h <= 23 && min <= 59) {
-      return { hour: h, minute: min, matched: clock[0].trim(), ...day };
+      return { hour: h, minute: min, matched: clock[0].trim(), approximate: false, ...day };
     }
+  }
+
+  for (const { re, hour } of PERIODS) {
+    const m = re.exec(text);
+    if (!m) continue;
+    return { hour, minute: 0, matched: m[0], approximate: true, ...day };
   }
 
   return null;
