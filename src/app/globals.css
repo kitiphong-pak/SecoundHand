@@ -161,3 +161,28 @@ body {
 :root[data-theme="dark"] .logo-theme-dark {
   display: block;
 }
+
+/* ฟอร์มที่ลอยทับกล่องแชท (ฟอร์มนัด / ฟอร์มเสนอราคา ใน ChatThread.tsx) เลื่อนขึ้นมาจากด้านล่าง
+   แทนที่จะโผล่มาทันที — การเคลื่อนไหวสั้นๆ บอกว่ามันมาจากปุ่มด้านล่างและจะกลับไปทางเดิม ไม่ใช่
+   หน้าใหม่ที่เปลี่ยนไปทั้งหน้า
+   คนที่ตั้งเครื่องไว้ว่าไม่อยากเห็นการเคลื่อนไหว (เช่นคนที่เวียนหัวกับภาพเลื่อน) ต้องไม่โดนบังคับดู */
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sheet-in {
+  animation: sheet-in 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-in {
+    animation: none;
+  }
+}
