@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { createSupabaseMock } from "@/test/supabaseMock";
+import { createSupabaseMock, hasOp } from "@/test/supabaseMock";
 import { MEETUP_MAX_AHEAD_MS } from "@/lib/orderFlowConfig";
 
 // การนัดเจอคือเหตุการณ์เดียวที่ระบบรู้จักใน flow ใหม่ (ไม่มีเงินไหลผ่านระบบแล้ว) สิ่งที่ต้องกันคือ
@@ -25,6 +25,7 @@ vi.mock("@/lib/auditLog", () => ({
 
 const { POST: propose } = await import("@/app/api/orders/[id]/meetup/route");
 const { POST: respond } = await import("@/app/api/meetups/[id]/respond/route");
+const { GET: places } = await import("@/app/api/meetups/places/route");
 
 const BUYER = { id: "buyer-1", role: "user", name: "ผู้ซื้อ" };
 const SELLER = { id: "seller-1", role: "user", name: "ผู้ขาย" };
@@ -189,5 +190,58 @@ describe("ตอบรับ/ปฏิเสธนัด", () => {
     const res = await respond(post({ accept: false }), meetupParams);
     expect(res.status).toBe(200);
     expect(auditCalls.list).toHaveLength(0);
+  });
+});
+
+// คนมักตกลงสถานที่ได้ก่อนแล้วค่อยเคาะเวลาทีหลัง ("เอาหน้าห้างนะ เดี๋ยวนัดเวลาอีกที") ถ้าบังคับให้
+// กรอกเวลาก่อน คนจะกรอกมั่วๆ ไปก่อน ซึ่งแย่กว่าปล่อยว่าง เพราะเวลามั่วกลายเป็นนัดจริงที่อีกฝ่ายเชื่อ
+describe("นัดที่ยังไม่ระบุเวลา", () => {
+  it("ใส่แค่สถานที่ → 201 และส่งเวลาเป็น null เข้า RPC", async () => {
+    mock.current!.queueResult({ data: orderRow(), error: null });
+    mock.current!.queueResult({ data: [proposalRow({ meetup_at: null })], error: null });
+
+    const res = await propose(post({ place: "หน้าห้าง" }), orderParams);
+    expect(res.status).toBe(201);
+    expect((mock.current!.rpcCalls[0].args as { p_meetup_at: unknown }).p_meetup_at).toBeNull();
+  });
+
+  it("ไม่มีสถานที่ ถึงจะมีเวลา ก็ยังไม่ผ่าน → 400", async () => {
+    const res = await propose(post({ meetupAt: inDays(1), place: "" }), orderParams);
+    expect(res.status).toBe(400);
+    expect(mock.current!.calls).toHaveLength(0);
+  });
+
+  // ต่างจาก "ไม่ใส่เวลา" ตรงที่ใส่มาแล้วแต่อ่านไม่ออก — ต้องบอกว่าผิด ไม่ใช่ปัดทิ้งเงียบๆ
+  // แล้วกลายเป็นนัดที่ไม่มีเวลาโดยที่คนส่งคิดว่าตั้งเวลาไปแล้ว
+  it("ใส่เวลามาแต่อ่านไม่ออก → 400 ไม่ใช่ปัดเวลาทิ้งแล้วบันทึกต่อ", async () => {
+    const res = await propose(post({ meetupAt: "เสาร์นี้", place: "หน้าห้าง" }), orderParams);
+    expect(res.status).toBe(400);
+    expect(mock.current!.rpcCalls).toHaveLength(0);
+  });
+});
+
+describe("ปุ่มลัดสถานที่ที่เคยนัด", () => {
+  it("ตัดสถานที่ซ้ำออก เหลือ 3 อันล่าสุด และดูเฉพาะของตัวเอง", async () => {
+    mock.current!.queueResult({
+      data: [
+        { place: "หน้า BTS อโศก", created_at: "2026-09-20T00:00:00Z" },
+        { place: "หน้า BTS อโศก", created_at: "2026-09-19T00:00:00Z" },
+        { place: "หน้าเซเว่นปากซอย", created_at: "2026-09-18T00:00:00Z" },
+        { place: "Maya ชั้น 1", created_at: "2026-09-17T00:00:00Z" },
+        { place: "หน้ามหาลัย", created_at: "2026-09-16T00:00:00Z" },
+      ],
+      error: null,
+    });
+
+    const res = await places();
+    expect(await res.json()).toEqual({
+      places: ["หน้า BTS อโศก", "หน้าเซเว่นปากซอย", "Maya ชั้น 1"],
+    });
+    expect(hasOp(mock.current!.callsTo("meetup_proposals")[0], "eq", "proposed_by", BUYER.id)).toBe(true);
+  });
+
+  it("ยังไม่ล็อกอิน → 401", async () => {
+    mockUser.current = null;
+    expect((await places()).status).toBe(401);
   });
 });

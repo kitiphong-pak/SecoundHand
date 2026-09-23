@@ -24,15 +24,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       { status: 400 }
     );
   }
-  if (!meetupAtRaw || Number.isNaN(meetupAt.getTime())) {
-    return NextResponse.json({ error: "กรุณาระบุวันและเวลานัด" }, { status: 400 });
-  }
-  if (meetupAt.getTime() <= Date.now()) {
-    return NextResponse.json({ error: "เวลานัดต้องเป็นเวลาในอนาคต" }, { status: 400 });
-  }
-  // กันนัดไกลเกินจริง เช่นพิมพ์ปีผิดเป็น 2570 แล้วสินค้าถูกจองค้างไว้ข้ามปีโดยไม่มีใครรู้ตัว
-  if (meetupAt.getTime() - Date.now() > MEETUP_MAX_AHEAD_MS) {
-    return NextResponse.json({ error: "นัดล่วงหน้าได้ไม่เกิน 30 วัน" }, { status: 400 });
+  // เวลาไม่ใส่มาก็ได้ — คนมักตกลงสถานที่ได้ก่อนแล้วค่อยเคาะเวลาทีหลัง บังคับให้กรอกก่อนมีแต่จะได้
+  // เวลามั่วๆ ที่อีกฝ่ายเชื่อ แต่ถ้าใส่มาแล้วอ่านไม่ออกถือว่าผิด ไม่ใช่ปัดทิ้งเงียบๆ กลายเป็นนัดไร้เวลา
+  const hasTime = meetupAtRaw !== "";
+  if (hasTime) {
+    if (Number.isNaN(meetupAt.getTime())) {
+      return NextResponse.json({ error: "อ่านวันและเวลานัดไม่ออก" }, { status: 400 });
+    }
+    if (meetupAt.getTime() <= Date.now()) {
+      return NextResponse.json({ error: "เวลานัดต้องเป็นเวลาในอนาคต" }, { status: 400 });
+    }
+    // กันนัดไกลเกินจริง เช่นพิมพ์ปีผิดเป็น 2570 แล้วสินค้าถูกจองค้างไว้ข้ามปีโดยไม่มีใครรู้ตัว
+    if (meetupAt.getTime() - Date.now() > MEETUP_MAX_AHEAD_MS) {
+      return NextResponse.json({ error: "นัดล่วงหน้าได้ไม่เกิน 30 วัน" }, { status: 400 });
+    }
   }
 
   // เช็คที่ฝั่งแอปก่อนเพื่อให้ได้ข้อความบอกเหตุผลที่ตรงจุด ส่วน propose_meetup เช็คซ้ำอีกชั้นใน
@@ -50,7 +55,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { data, error } = await supabase.rpc("propose_meetup", {
     p_order_id: id,
     p_from_user_id: user.id,
-    p_meetup_at: meetupAt.toISOString(),
+    p_meetup_at: hasTime ? meetupAt.toISOString() : null,
     p_place: place,
   });
   const row = (data as Record<string, unknown>[] | null)?.[0];

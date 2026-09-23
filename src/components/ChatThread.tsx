@@ -1,11 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { ChatMessage, MeetupProposal, Offer, Order, User } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { callApi, messageOf } from "@/lib/apiResponse";
+import { parseThaiTime, resolveMeetupAt } from "@/lib/thaiTime";
+
+/** ดูย้อนหลังกี่ข้อความเพื่อหาเวลานัด — ลึกกว่านี้จะขุดเวลาที่คุยกันจบไปแล้วขึ้นมาเสนอซ้ำ */
+const TIME_SCAN_DEPTH = 8;
+
+// ค่าที่ input type="datetime-local" ต้องการคือเวลาท้องถิ่นรูปแบบ YYYY-MM-DDTHH:mm — ใช้ toISOString
+// ไม่ได้เพราะนั่นเป็น UTC ซึ่งจะเพี้ยนไป 7 ชั่วโมงสำหรับผู้ใช้ในไทย
+const toDateTimeLocal = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 
 const OFFER_BADGE = {
   pending: { label: "รอตอบรับ", status: "pending" as const },
@@ -52,8 +63,19 @@ function MeetupBubble({
       ].join(" ")}
     >
       <p className="text-xs text-neutral-500">ขอนัดเจอ</p>
-      <p className="mt-0.5 font-medium text-neutral-900">{formatMeetupAt(meetup.meetupAt)} น.</p>
+      {meetup.meetupAt ? (
+        <p className="mt-0.5 font-medium text-neutral-900">{formatMeetupAt(meetup.meetupAt)} น.</p>
+      ) : (
+        <p className="mt-0.5 font-medium text-neutral-400">ยังไม่ได้ระบุเวลา</p>
+      )}
       <p className="mt-0.5 text-neutral-700">ที่ {meetup.place}</p>
+      {/* นัดที่ไม่มีเวลายังไม่ใช่นัดจริง (ออเดอร์จะยังไม่ขึ้นว่า "นัดเจอแล้ว") เตือนไว้แบบไม่ตะโกน
+          เพราะคนตั้งใจตกลงสถานที่ก่อนอยู่แล้ว ไม่ใช่ลืม */}
+      {!meetup.meetupAt && (
+        <p className="mt-1 text-center text-xs text-neutral-400">
+          อย่าลืมนัดหมายเวลาเพื่อนัดรับ-ส่งสินค้า
+        </p>
+      )}
       <div className="mt-2">
         <Badge status={badge.status}>{badge.label}</Badge>
       </div>
@@ -178,6 +200,9 @@ export function ChatThread({
   const [meetupPlace, setMeetupPlace] = useState("");
   const [meetupError, setMeetupError] = useState("");
   const [busyMeetupId, setBusyMeetupId] = useState<string | null>(null);
+  // ข้อความที่ระบบอ่านเวลาได้แล้วผู้ใช้จัดการไปแล้ว (กดใช้หรือกดปิด) — ไม่ต้องเสนอซ้ำอีก
+  const [handledTimeMessageId, setHandledTimeMessageId] = useState<string | null>(null);
+  const [recentPlaces, setRecentPlaces] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -258,17 +283,18 @@ export function ChatThread({
     e.preventDefault();
     setMeetupError("");
     if (!order) return;
-    const when = new Date(meetupAt);
-    if (!meetupAt || Number.isNaN(when.getTime())) {
-      setMeetupError("เลือกวันและเวลาที่จะเจอกัน");
-      return;
-    }
-    if (when.getTime() <= Date.now()) {
-      setMeetupError("เวลานัดต้องเป็นเวลาในอนาคต");
-      return;
-    }
+    // สถานที่คือสิ่งเดียวที่ขาดไม่ได้ ส่วนเวลาจะเคาะทีหลังก็ได้ (ดู migration 024)
     if (!meetupPlace.trim()) {
       setMeetupError("ระบุสถานที่นัด เช่น หน้า BTS อโศก ทางออก 3");
+      return;
+    }
+    const when = meetupAt ? new Date(meetupAt) : null;
+    if (when && Number.isNaN(when.getTime())) {
+      setMeetupError("อ่านวันและเวลาที่เลือกไม่ออก");
+      return;
+    }
+    if (when && when.getTime() <= Date.now()) {
+      setMeetupError("เวลานัดต้องเป็นเวลาในอนาคต");
       return;
     }
     setSending(true);
@@ -278,7 +304,7 @@ export function ChatThread({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ meetupAt: when.toISOString(), place: meetupPlace.trim() }),
+          body: JSON.stringify({ meetupAt: when ? when.toISOString() : null, place: meetupPlace.trim() }),
         },
         "เสนอนัดไม่สำเร็จ"
       );
@@ -365,6 +391,35 @@ export function ChatThread({
   const canProposeMeetup =
     order !== null && (order.status === "reserved" || order.status === "meetup_scheduled");
 
+  // อ่านเวลานัดจากข้อความที่คุยกันล่าสุด — เอาอันใหม่สุดที่อ่านออก และข้ามการ์ด (ข้อความของการ์ด
+  // มีเวลาอยู่ในตัวอยู่แล้ว ถ้าไม่ข้ามจะวนเสนอเวลาเดิมที่เพิ่งเสนอไปไม่จบ)
+  const detectedTime = useMemo(() => {
+    if (!canProposeMeetup) return null;
+    for (const m of messages.slice(-TIME_SCAN_DEPTH).reverse()) {
+      if (m.meetupProposalId || m.offerId) continue;
+      const parsed = parseThaiTime(m.text);
+      if (!parsed) continue;
+      return { at: resolveMeetupAt(parsed, new Date()), matched: parsed.matched, messageId: m.id };
+    }
+    return null;
+  }, [messages, canProposeMeetup]);
+
+  const showTimeChip =
+    detectedTime !== null && !showMeetupForm && detectedTime.messageId !== handledTimeMessageId;
+
+  const openMeetupForm = async (prefillAt?: Date) => {
+    if (prefillAt) setMeetupAt(toDateTimeLocal(prefillAt));
+    setShowMeetupForm(true);
+    setMeetupError("");
+    // ปุ่มลัดสถานที่ดึงตอนเปิดฟอร์มเท่านั้น ไม่ผูกไปกับ poll ของแชทที่ยิงทุก 4 วินาที
+    try {
+      const data = await callApi<{ places: string[] }>("/api/meetups/places");
+      setRecentPlaces(data.places ?? []);
+    } catch {
+      // ไม่มีปุ่มลัดก็พิมพ์เองได้ ไม่ใช่เรื่องที่ต้องขึ้น error ให้ตกใจ
+    }
+  };
+
   return (
     <div className="flex flex-1 flex-col rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0">
       <div className="border-b border-neutral-100 px-4 py-3 text-sm font-medium text-neutral-900">
@@ -389,7 +444,7 @@ export function ChatThread({
                     onAccept={() => onRespondMeetup(meetup.id, true)}
                     onProposeOther={async () => {
                       await onRespondMeetup(meetup.id, false);
-                      setShowMeetupForm(true);
+                      openMeetupForm();
                     }}
                   />
                 ) : offer ? (
@@ -430,6 +485,33 @@ export function ChatThread({
         <p className="border-t border-neutral-100 px-3 py-2 text-xs text-error-500">{meetupError}</p>
       )}
 
+      {/* ระบบอ่านเวลาจากที่คุยกันได้ แต่ไม่บันทึกเอง — ภาษาไทยบอกเวลาหลายระบบปนกัน คนพิมพ์ต้อง
+          เป็นคนยืนยันว่าอ่านถูก ("ห้าโมง" = 17:00 แต่ "ห้าโมงเช้า" = 11:00) */}
+      {showTimeChip && detectedTime && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-neutral-100 bg-brand-surface px-3 py-2 text-xs">
+          <span className="text-neutral-600">
+            จากที่คุยกัน (&ldquo;{detectedTime.matched}&rdquo;) = {formatMeetupAt(detectedTime.at.toISOString())} น.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setHandledTimeMessageId(detectedTime.messageId);
+              openMeetupForm(detectedTime.at);
+            }}
+            className="rounded-[var(--radius-sm)] bg-primary-500 px-2.5 py-1 font-medium text-white hover:bg-primary-600"
+          >
+            ใช้เวลานี้นัด
+          </button>
+          <button
+            type="button"
+            onClick={() => setHandledTimeMessageId(detectedTime.messageId)}
+            className="text-neutral-400 underline"
+          >
+            ไม่ใช่
+          </button>
+        </div>
+      )}
+
       {canProposeMeetup && showMeetupForm && (
         <form onSubmit={onSubmitMeetup} className="flex flex-col gap-2 border-t border-neutral-100 p-3">
           <input
@@ -438,6 +520,21 @@ export function ChatThread({
             onChange={(e) => setMeetupAt(e.target.value)}
             className="rounded-[var(--radius-md)] border border-neutral-300 px-3.5 py-2.5 text-sm outline-none focus:border-primary-500"
           />
+          {/* คนขายของมือสองมักนัดที่เดิมซ้ำๆ — ปุ่มลัดตัดการพิมพ์ใหม่ทุกครั้งออก */}
+          {recentPlaces.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {recentPlaces.map((place) => (
+                <button
+                  key={place}
+                  type="button"
+                  onClick={() => setMeetupPlace(place)}
+                  className="rounded-full border border-border px-2.5 py-1 text-xs text-brand-text hover:bg-brand-surface"
+                >
+                  {place}
+                </button>
+              ))}
+            </div>
+          )}
           <input
             value={meetupPlace}
             onChange={(e) => setMeetupPlace(e.target.value)}
@@ -445,6 +542,11 @@ export function ChatThread({
             placeholder="สถานที่นัด เช่น หน้า BTS อโศก ทางออก 3"
             className="rounded-[var(--radius-md)] border border-neutral-300 px-3.5 py-2.5 text-sm outline-none focus:border-primary-500"
           />
+          {!meetupAt && (
+            <p className="text-center text-xs text-neutral-400">
+              อย่าลืมนัดหมายเวลาเพื่อนัดรับ-ส่งสินค้า
+            </p>
+          )}
           <div className="flex gap-2">
             <Button type="submit" size="sm" variant="primary" disabled={sending}>
               ส่งคำขอนัด
@@ -488,7 +590,7 @@ export function ChatThread({
         {canProposeMeetup && !showMeetupForm && (
           <button
             type="button"
-            onClick={() => setShowMeetupForm(true)}
+            onClick={() => openMeetupForm()}
             className="flex-none rounded-[var(--radius-md)] border border-border px-3 py-2.5 text-sm text-brand-text hover:bg-brand-surface"
           >
             {order?.meetupConfirmedAt ? "เปลี่ยนนัด" : "นัดเจอ"}

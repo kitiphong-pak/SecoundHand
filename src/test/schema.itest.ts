@@ -430,7 +430,7 @@ type ProposalRow = {
 
 const tomorrow = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-const proposeMeetup = (orderId: string, from: string, at: string, place: string) =>
+const proposeMeetup = (orderId: string, from: string, at: string | null, place: string) =>
   q<ProposalRow>(`select * from propose_meetup($1,$2,$3,$4)`, [orderId, from, at, place]);
 
 const respondMeetup = (proposalId: string, responder: string, accept: boolean) =>
@@ -541,5 +541,54 @@ describe("นัดเจอในแชท (migration 023)", () => {
     await expect(
       proposeMeetup(orderId, buyerId, new Date(Date.now() - 60_000).toISOString(), "ที่หนึ่ง")
     ).rejects.toThrow(/future/);
+  });
+});
+
+// ---- นัดที่ยังไม่ระบุเวลา (migration 024) ----
+//
+// กติกาที่ต้องพิสูจน์: ออเดอร์จะนับว่า "นัดเจอแล้ว" ก็ต่อเมื่อมีเวลาแล้วเท่านั้น — นัดที่มีแต่สถานที่
+// ยังไม่ใช่นัด เพราะไม่มีใครรู้ว่าจะไปเจอกันกี่โมง และ Phase 2 ก็ไม่มีเวลาให้เทียบว่าใครมาสาย
+describe("นัดที่ยังไม่ระบุเวลา (migration 024)", () => {
+  it("เสนอเฉพาะสถานที่ได้ ตกลงแล้วออเดอร์ได้สถานที่แต่ยังไม่ใช่ meetup_scheduled", async () => {
+    const { orderId, buyerId, sellerId } = await seedOrder();
+    const [proposal] = await proposeMeetup(orderId, buyerId, null, "หน้าห้างเมญ่า");
+
+    const [answered] = await respondMeetup(proposal.id, sellerId, true);
+    expect(answered.status).toBe("accepted");
+
+    const order = await orderOf(orderId);
+    expect(order.meetup_place).toBe("หน้าห้างเมญ่า");
+    expect(order.meetup_at).toBeNull();
+    expect(order.status).toBe("reserved");
+  });
+
+  it("พอเคาะเวลาตามมาทีหลังและตกลงกัน ถึงจะเป็น meetup_scheduled", async () => {
+    const { orderId, buyerId, sellerId } = await seedOrder();
+    const [placeOnly] = await proposeMeetup(orderId, buyerId, null, "หน้าห้างเมญ่า");
+    await respondMeetup(placeOnly.id, sellerId, true);
+
+    const at = tomorrow();
+    const [withTime] = await proposeMeetup(orderId, sellerId, at, "หน้าห้างเมญ่า");
+    await respondMeetup(withTime.id, buyerId, true);
+
+    const order = await orderOf(orderId);
+    expect(order.status).toBe("meetup_scheduled");
+    expect(new Date(order.meetup_at!).toISOString()).toBe(new Date(at).toISOString());
+  });
+
+  // เคสที่พลาดง่ายที่สุด: ย้ายสถานที่นัดอย่างเดียวแล้วเวลาที่ตกลงกันไว้หายไปทั้งที่ไม่มีใครสั่ง
+  it("ข้อเสนอที่ไม่มีเวลา ต้องไม่ล้างเวลาที่ตกลงกันไว้แล้ว", async () => {
+    const { orderId, buyerId, sellerId } = await seedOrder();
+    const at = tomorrow();
+    const [first] = await proposeMeetup(orderId, buyerId, at, "ที่เดิม");
+    await respondMeetup(first.id, sellerId, true);
+
+    const [movePlace] = await proposeMeetup(orderId, sellerId, null, "ย้ายไปหน้าเซเว่น");
+    await respondMeetup(movePlace.id, buyerId, true);
+
+    const order = await orderOf(orderId);
+    expect(order.meetup_place).toBe("ย้ายไปหน้าเซเว่น");
+    expect(new Date(order.meetup_at!).toISOString()).toBe(new Date(at).toISOString());
+    expect(order.status).toBe("meetup_scheduled");
   });
 });

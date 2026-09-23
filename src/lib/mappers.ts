@@ -112,7 +112,7 @@ export function mapMeetupProposal(row: Record<string, unknown>): MeetupProposal 
     id: row.id as string,
     orderId: row.order_id as string,
     proposedBy: row.proposed_by as string,
-    meetupAt: row.meetup_at as string,
+    meetupAt: (row.meetup_at as string | null) ?? undefined,
     place: row.place as string,
     status: row.status as MeetupProposal["status"],
     createdAt: row.created_at as string,

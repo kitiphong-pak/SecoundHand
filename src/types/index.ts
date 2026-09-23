@@ -114,7 +114,8 @@ export interface MeetupProposal {
   id: string;
   orderId: string;
   proposedBy: string;
-  meetupAt: string;
+  /** ว่างได้ — ตกลงสถานที่ก่อนแล้วค่อยเคาะเวลาทีหลังได้ ออเดอร์จะยังไม่นับว่า "นัดเจอแล้ว" */
+  meetupAt?: string;
   place: string;
   status: MeetupProposalStatus;
   createdAt: string;
