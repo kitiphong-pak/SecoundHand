@@ -510,8 +510,15 @@ export function ChatThread({
         </div>
       )}
 
+      {/* ฟอร์มสองอันล่างนี้เป็นของชั่วคราว จึงลอยทับกล่องแชทแทนที่จะต่อท้ายให้กล่องสูงขึ้น —
+          ไม่งั้นทุกครั้งที่เปิดฟอร์ม ข้อความในแชทจะถูกดันหายไปจากสายตาและหน้าทั้งหน้าจะกระโดด
+          ยึดที่ bottom-full ของกล่องนี้ ฟอร์มจึงอยู่เหนือช่องพิมพ์พอดีเสมอ ไม่ต้องเดาความสูงเป็นตัวเลข */}
+      <div className="relative">
       {canProposeMeetup && showMeetupForm && (
-        <form onSubmit={onSubmitMeetup} className="flex flex-col gap-2 border-t border-neutral-100 p-3">
+        <form
+          onSubmit={onSubmitMeetup}
+          className="absolute inset-x-0 bottom-full z-20 flex max-h-[60vh] flex-col gap-2 overflow-y-auto rounded-t-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.12)]"
+        >
           <input
             type="datetime-local"
             value={meetupAt}
@@ -561,7 +568,10 @@ export function ChatThread({
       )}
 
       {canNegotiate && !acceptedOffer && showOfferForm && (
-        <form onSubmit={onSubmitOffer} className="flex flex-col gap-2 border-t border-neutral-100 p-3">
+        <form
+          onSubmit={onSubmitOffer}
+          className="absolute inset-x-0 bottom-full z-20 flex flex-col gap-2 rounded-t-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.12)]"
+        >
           <div className="flex items-center gap-2">
             <span className="text-sm text-neutral-500">฿</span>
             <input
@@ -617,6 +627,7 @@ export function ChatThread({
           ส่ง
         </button>
       </form>
+      </div>
     </div>
   );
 }
