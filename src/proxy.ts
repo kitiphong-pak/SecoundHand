@@ -44,7 +44,13 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // ข้ามไฟล์ static และรูป — ไม่มี session ให้รีเฟรช และถ้าไม่ข้าม ทุกรูปบนหน้าจะยิงตรวจ token ซ้ำ
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    // ข้าม /_next ทั้งก้อน ไม่ใช่แค่ static กับ image — ของข้างในนั้นไม่มี session ให้รีเฟรชสักอย่าง
+    //
+    // เดิมยกเว้นแค่ _next/static กับ _next/image ทำให้ proxy ตัวนี้ไปทำงานบน /_next/hmr ซึ่งเป็น
+    // การ upgrade เป็น WebSocket ของ Fast Refresh ด้วย พอมีโค้ดคั่นกลางแล้วคืน response ใหม่
+    // การ upgrade จะไม่สำเร็จ ("WebSocket is closed before the connection is established")
+    // เบราว์เซอร์เลยวนเชื่อมใหม่ทุกวินาทีไม่จบ จนหน้าเว็บค้างที่ "Rendering …" กดลิงก์ไม่ไปไหน
+    // และจะหนักขึ้นตอนล็อกอินอยู่ เพราะ getClaims() ต้องรอเช็ค/ต่ออายุ token ก่อนด้วย
+    "/((?!_next/|__nextjs|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
