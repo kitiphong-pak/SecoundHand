@@ -6,10 +6,7 @@ import type { ChatMessage, MeetupProposal, Offer, Order, User } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { callApi, messageOf } from "@/lib/apiResponse";
-import { parseThaiTime, resolveMeetupAt } from "@/lib/thaiTime";
-
-/** ดูย้อนหลังกี่ข้อความเพื่อหาเวลานัด — ลึกกว่านี้จะขุดเวลาที่คุยกันจบไปแล้วขึ้นมาเสนอซ้ำ */
-const TIME_SCAN_DEPTH = 8;
+import { findTimeSuggestion } from "@/lib/meetupSuggestion";
 
 // ค่าที่ input type="datetime-local" ต้องการคือเวลาท้องถิ่นรูปแบบ YYYY-MM-DDTHH:mm — ใช้ toISOString
 // ไม่ได้เพราะนั่นเป็น UTC ซึ่งจะเพี้ยนไป 7 ชั่วโมงสำหรับผู้ใช้ในไทย
@@ -391,24 +388,25 @@ export function ChatThread({
   const canProposeMeetup =
     order !== null && (order.status === "reserved" || order.status === "meetup_scheduled");
 
-  // อ่านเวลานัดจากข้อความที่คุยกันล่าสุด — เอาอันใหม่สุดที่อ่านออก และข้ามการ์ด (ข้อความของการ์ด
-  // มีเวลาอยู่ในตัวอยู่แล้ว ถ้าไม่ข้ามจะวนเสนอเวลาเดิมที่เพิ่งเสนอไปไม่จบ)
-  const detectedTime = useMemo(() => {
-    if (!canProposeMeetup) return null;
-    for (const m of messages.slice(-TIME_SCAN_DEPTH).reverse()) {
-      if (m.meetupProposalId || m.offerId) continue;
-      const parsed = parseThaiTime(m.text);
-      if (!parsed) continue;
-      return { at: resolveMeetupAt(parsed, new Date()), matched: parsed.matched, messageId: m.id };
-    }
-    return null;
-  }, [messages, canProposeMeetup]);
+  // อ่านเวลานัดจากข้อความที่ "เราเป็นคนพิมพ์" เท่านั้น — ดูกติกาทั้งหมดใน meetupSuggestion.ts
+  const detectedTime = useMemo(
+    () => (canProposeMeetup ? findTimeSuggestion(messages, currentUserId, new Date()) : null),
+    [messages, currentUserId, canProposeMeetup]
+  );
 
   const showTimeChip =
     detectedTime !== null && !showMeetupForm && detectedTime.messageId !== handledTimeMessageId;
 
+  // สถานที่ที่ใช้อยู่ตอนนี้ — นัดที่ตกลงกันแล้วมาก่อน ถ้ายังไม่มีก็เอาจากข้อเสนอล่าสุดที่เคยพิมพ์ไป
+  const currentPlace =
+    order?.meetupPlace ??
+    [...meetups].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.place ??
+    "";
+
   const openMeetupForm = async (prefillAt?: Date) => {
     if (prefillAt) setMeetupAt(toDateTimeLocal(prefillAt));
+    // เปลี่ยนแค่เวลาไม่ต้องเลือกสถานที่ใหม่ — เติมที่เดิมไว้ให้ ใครจะย้ายที่ก็แก้ในช่องได้เหมือนเดิม
+    setMeetupPlace((current) => current || currentPlace);
     setShowMeetupForm(true);
     setMeetupError("");
     // ปุ่มลัดสถานที่ดึงตอนเปิดฟอร์มเท่านั้น ไม่ผูกไปกับ poll ของแชทที่ยิงทุก 4 วินาที
