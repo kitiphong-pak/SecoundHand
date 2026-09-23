@@ -394,8 +394,12 @@ export function ChatThread({
     [messages, currentUserId, canProposeMeetup]
   );
 
+  // ชิปกับฟอร์มลอยอยู่ตำแหน่งเดียวกัน จึงต้องไม่โผล่พร้อมกัน
   const showTimeChip =
-    detectedTime !== null && !showMeetupForm && detectedTime.messageId !== handledTimeMessageId;
+    detectedTime !== null &&
+    !showMeetupForm &&
+    !showOfferForm &&
+    detectedTime.messageId !== handledTimeMessageId;
 
   // สถานที่ที่ใช้อยู่ตอนนี้ — นัดที่ตกลงกันแล้วมาก่อน ถ้ายังไม่มีก็เอาจากข้อเสนอล่าสุดที่เคยพิมพ์ไป
   const currentPlace =
@@ -483,10 +487,15 @@ export function ChatThread({
         <p className="border-t border-neutral-100 px-3 py-2 text-xs text-error-500">{meetupError}</p>
       )}
 
+      {/* ฟอร์มสองอันล่างนี้เป็นของชั่วคราว จึงลอยทับกล่องแชทแทนที่จะต่อท้ายให้กล่องสูงขึ้น —
+          ไม่งั้นทุกครั้งที่เปิดฟอร์ม ข้อความในแชทจะถูกดันหายไปจากสายตาและหน้าทั้งหน้าจะกระโดด
+          ยึดที่ bottom-full ของกล่องนี้ ฟอร์มจึงอยู่เหนือช่องพิมพ์พอดีเสมอ ไม่ต้องเดาความสูงเป็นตัวเลข */}
+      <div className="relative">
       {/* ระบบอ่านเวลาจากที่คุยกันได้ แต่ไม่บันทึกเอง — ภาษาไทยบอกเวลาหลายระบบปนกัน คนพิมพ์ต้อง
-          เป็นคนยืนยันว่าอ่านถูก ("ห้าโมง" = 17:00 แต่ "ห้าโมงเช้า" = 11:00) */}
+          เป็นคนยืนยันว่าอ่านถูก ("ห้าโมง" = 17:00 แต่ "ห้าโมงเช้า" = 11:00)
+          ชิปนี้เป็นของชั่วคราวเหมือนฟอร์ม จึงลอยทับด้วยเหตุผลเดียวกัน */}
       {showTimeChip && detectedTime && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-neutral-100 bg-brand-surface px-3 py-2 text-xs">
+        <div className="sheet-in absolute inset-x-0 bottom-full z-10 flex flex-wrap items-center gap-2 rounded-t-[var(--radius-lg)] border border-neutral-200 bg-brand-surface px-3 py-2 text-xs shadow-[0_-8px_24px_rgba(0,0,0,0.12)]">
           {/* คำกว้างๆ อย่าง "บ่าย" ระบบเดาเวลากลางๆ ให้ ต้องเขียนให้เห็นว่าเดา ไม่ใช่เวลาที่ผู้ใช้
               ระบุเอง ไม่งั้นคนกดยืนยันผ่านๆ แล้วได้นัดบ่ายสองทั้งที่ตั้งใจบอกแค่ "ช่วงบ่ายก็ได้" */}
           <span className="text-neutral-600">
@@ -514,10 +523,6 @@ export function ChatThread({
         </div>
       )}
 
-      {/* ฟอร์มสองอันล่างนี้เป็นของชั่วคราว จึงลอยทับกล่องแชทแทนที่จะต่อท้ายให้กล่องสูงขึ้น —
-          ไม่งั้นทุกครั้งที่เปิดฟอร์ม ข้อความในแชทจะถูกดันหายไปจากสายตาและหน้าทั้งหน้าจะกระโดด
-          ยึดที่ bottom-full ของกล่องนี้ ฟอร์มจึงอยู่เหนือช่องพิมพ์พอดีเสมอ ไม่ต้องเดาความสูงเป็นตัวเลข */}
-      <div className="relative">
       {canProposeMeetup && showMeetupForm && (
         <form
           onSubmit={onSubmitMeetup}
