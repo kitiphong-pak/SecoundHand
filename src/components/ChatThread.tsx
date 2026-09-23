@@ -476,20 +476,11 @@ export function ChatThread({
         <div ref={bottomRef} />
       </div>
 
-      {/* นัดที่ตกลงกันแล้ว ปักไว้เหนือช่องพิมพ์ ไม่ต้องเลื่อนหาการ์ดเก่าในประวัติแชท */}
-      {order?.meetupConfirmedAt && order.meetupAt && (
-        <div className="border-t border-neutral-100 bg-success-50 px-3 py-2 text-xs text-neutral-700">
-          นัดแล้ว {formatMeetupAt(order.meetupAt)} น. ที่ {order.meetupPlace}
-        </div>
-      )}
-
-      {meetupError && !showMeetupForm && (
-        <p className="border-t border-neutral-100 px-3 py-2 text-xs text-error-500">{meetupError}</p>
-      )}
-
-      {/* ฟอร์มสองอันล่างนี้เป็นของชั่วคราว จึงลอยทับกล่องแชทแทนที่จะต่อท้ายให้กล่องสูงขึ้น —
-          ไม่งั้นทุกครั้งที่เปิดฟอร์ม ข้อความในแชทจะถูกดันหายไปจากสายตาและหน้าทั้งหน้าจะกระโดด
-          ยึดที่ bottom-full ของกล่องนี้ ฟอร์มจึงอยู่เหนือช่องพิมพ์พอดีเสมอ ไม่ต้องเดาความสูงเป็นตัวเลข */}
+      {/* ของชั่วคราว (ชิปถามเวลา, ฟอร์มนัด, ฟอร์มเสนอราคา) ลอยทับกล่องแชทแทนที่จะต่อท้ายให้กล่อง
+          สูงขึ้น — ไม่งั้นทุกครั้งที่เปิด ข้อความในแชทจะถูกดันหายไปจากสายตาและหน้าทั้งหน้าจะกระโดด
+          ยึดที่ bottom-full ของกล่องนี้ ของที่ลอยจึงอยู่เหนือขอบบนของกล่องนี้พอดีเสมอ
+          ของที่อยู่ในสายเลย์เอาต์ปกติ (แถบ "นัดแล้ว", ข้อความ error, ช่องพิมพ์) ต้องอยู่ "ข้างใน"
+          กล่องนี้ด้วย ไม่งั้นของที่ลอยจะไปทับมันแทนที่จะอยู่เหนือมัน */}
       <div className="relative">
       {/* ระบบอ่านเวลาจากที่คุยกันได้ แต่ไม่บันทึกเอง — ภาษาไทยบอกเวลาหลายระบบปนกัน คนพิมพ์ต้อง
           เป็นคนยืนยันว่าอ่านถูก ("ห้าโมง" = 17:00 แต่ "ห้าโมงเช้า" = 11:00)
@@ -601,6 +592,17 @@ export function ChatThread({
           </div>
           {offerError && <p className="text-xs text-error-500">{offerError}</p>}
         </form>
+      )}
+
+      {/* นัดที่ตกลงกันแล้ว ปักไว้เหนือช่องพิมพ์ ไม่ต้องเลื่อนหาการ์ดเก่าในประวัติแชท */}
+      {order?.meetupConfirmedAt && order.meetupAt && (
+        <div className="border-t border-neutral-100 bg-success-50 px-3 py-2 text-xs text-neutral-700">
+          นัดแล้ว {formatMeetupAt(order.meetupAt)} น. ที่ {order.meetupPlace}
+        </div>
+      )}
+
+      {meetupError && !showMeetupForm && (
+        <p className="border-t border-neutral-100 px-3 py-2 text-xs text-error-500">{meetupError}</p>
       )}
 
       <form onSubmit={onSend} className="flex items-center gap-2 border-t border-neutral-100 p-3">
