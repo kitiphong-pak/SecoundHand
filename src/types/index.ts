@@ -61,8 +61,14 @@ export interface Order {
   status: OrderStatus;
   amount: number;
   paidAt?: string;
-  sellerMarkedDeliveredAt?: string; // เริ่มนับ timeout รอบที่ 1 (ผู้ซื้อ)
-  buyerConfirmedAt?: string; // เริ่มนับ timeout รอบที่ 2 (ผู้ขายกรอก OTP)
+  sellerMarkedDeliveredAt?: string; // เริ่มนับเวลารอผู้ซื้อยืนยันรับของ
+  buyerConfirmedAt?: string; // ผู้ซื้อกดยืนยันรับของแล้ว = ปิดดีล
+  // นัดที่ตกลงกันแล้ว (ว่างได้ — นัดกันนอกแอปหรือยังไม่ได้นัดก็ปิดดีลได้) มาจากข้อเสนอนัดที่ถูก
+  // ตอบรับใน MeetupProposal เก็บซ้ำไว้บนออเดอร์เพื่อให้อ่าน "ตกลงนัดกันเมื่อไหร่" ได้จากที่เดียว
+  meetupAt?: string;
+  meetupPlace?: string;
+  meetupProposedBy?: string;
+  meetupConfirmedAt?: string;
   completedAt?: string;
   disputeReason?: string;
   disputeOpenedAt?: string;
@@ -81,6 +87,7 @@ export interface ChatMessage {
   createdAt: string;
   read: boolean;
   offerId?: string; // ถ้าข้อความนี้คือการเสนอราคา ผูกกับแถวใน Offer — ดูสถานะล่าสุดจาก offers ไม่ใช่จากข้อความ
+  meetupProposalId?: string; // เช่นเดียวกัน แต่เป็นการ์ดขอนัดเจอ
 }
 
 // ข้อเสนอราคาต่อรองในแชท — เก็บแยกจากเนื้อข้อความเพราะมีสถานะเปลี่ยนได้หลังส่งไปแล้ว (ผู้รับ
@@ -95,6 +102,21 @@ export interface Offer {
   toUserId: string;
   amount: number;
   status: OfferStatus;
+  createdAt: string;
+  respondedAt?: string;
+}
+
+// ข้อเสนอนัดเจอในแชท — เหตุผลที่แยกเป็นแถวเหมือน Offer: สถานะเปลี่ยนได้หลังส่งไปแล้ว
+// superseded = ถูกข้อเสนอใหม่ทับก่อนมีคนตอบ ต่างจาก declined ที่อีกฝ่ายกดปฏิเสธจริงๆ
+export type MeetupProposalStatus = "pending" | "accepted" | "declined" | "superseded";
+
+export interface MeetupProposal {
+  id: string;
+  orderId: string;
+  proposedBy: string;
+  meetupAt: string;
+  place: string;
+  status: MeetupProposalStatus;
   createdAt: string;
   respondedAt?: string;
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { mapMessage, mapOffer, UUID_RE } from "@/lib/mappers";
+import { mapMessage, mapOffer, mapOrder, mapMeetupProposal, UUID_RE } from "@/lib/mappers";
 
 export async function GET(
   req: Request,
@@ -52,7 +52,27 @@ export async function GET(
     .order("created_at", { ascending: true });
   const offers = (offerRows ?? []).map(mapOffer);
 
-  return NextResponse.json({ messages, offers });
+  // ออเดอร์ที่ยังเดินอยู่ของคู่นี้ในสินค้านี้ (ถ้ามี) — ใช้ตัดสินว่าจะโชว์ปุ่ม "นัดเจอ" ไหม และเป็น
+  // เจ้าของข้อเสนอนัดทั้งหมด ไม่ต้องรู้ว่าใครเป็นผู้ซื้อผู้ขายก็ระบุออเดอร์ได้ เพราะคู่หนึ่งคู่กับ
+  // สินค้าหนึ่งมีออเดอร์ที่ยังไม่จบได้อย่างมากใบเดียว (unique index ใน migration 008)
+  const { data: orderRow } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("product_id", productId)
+    .in("buyer_id", [user.id, withUserId])
+    .in("seller_id", [user.id, withUserId])
+    .in("status", ["reserved", "meetup_scheduled", "awaiting_buyer_confirmation"])
+    .maybeSingle();
+  const order = orderRow ? mapOrder(orderRow) : null;
+
+  // ข้อเสนอนัดของออเดอร์นี้ — ดึงมาคู่กับข้อความด้วยเหตุผลเดียวกับข้อเสนอราคา: การ์ดในแชทต้อง
+  // โชว์สถานะล่าสุด ซึ่งเปลี่ยนได้หลังข้อความถูกส่งไปแล้ว
+  const { data: meetupRows } = order
+    ? await supabase.from("meetup_proposals").select("*").eq("order_id", order.id)
+    : { data: [] };
+  const meetups = (meetupRows ?? []).map(mapMeetupProposal);
+
+  return NextResponse.json({ messages, offers, order, meetups });
 }
 
 export async function POST(

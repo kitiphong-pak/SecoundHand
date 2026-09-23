@@ -406,3 +406,140 @@ describe("ข้อตกลงราคามีได้ครั้งละ�
     expect(old.status).toBe("cancelled");
   });
 });
+
+// ---- การนัดเจอ (migration 023) ----
+//
+// ชั้นนี้เทสด้วย mock ไม่ได้เหมือนกัน เพราะทั้งการทับข้อเสนอเก่า การกันคนเสนอกดยืนยันเอง และการ
+// เขียนนัดที่ตกลงแล้วลงออเดอร์ อยู่ใน plpgsql ทั้งหมด — ฝั่ง TypeScript เห็นแค่ "คืนแถวมาหรือเปล่า"
+async function seedOrder(status = "reserved") {
+  const { sellerId, buyerId, productId } = await seedPair();
+  const [order] = await q<{ id: string }>(
+    `insert into orders (product_id, buyer_id, seller_id, status, amount) values ($1,$2,$3,$4,1000) returning id`,
+    [productId, buyerId, sellerId, status]
+  );
+  return { sellerId, buyerId, productId, orderId: order.id };
+}
+
+type ProposalRow = {
+  id: string;
+  status: string;
+  meetup_at: string;
+  place: string;
+  proposed_by: string;
+};
+
+const tomorrow = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+const proposeMeetup = (orderId: string, from: string, at: string, place: string) =>
+  q<ProposalRow>(`select * from propose_meetup($1,$2,$3,$4)`, [orderId, from, at, place]);
+
+const respondMeetup = (proposalId: string, responder: string, accept: boolean) =>
+  q<ProposalRow>(`select * from respond_meetup($1,$2,$3)`, [proposalId, responder, accept]);
+
+const orderOf = async (orderId: string) =>
+  (
+    await q<{ status: string; meetup_at: string | null; meetup_place: string | null; meetup_confirmed_at: string | null; meetup_proposed_by: string | null }>(
+      `select status, meetup_at, meetup_place, meetup_confirmed_at, meetup_proposed_by from orders where id = $1`,
+      [orderId]
+    )
+  )[0];
+
+describe("นัดเจอในแชท (migration 023)", () => {
+  it("เสนอนัด → ได้ข้อเสนอ pending พร้อมข้อความในแชทที่ผูกกับข้อเสนอนั้น", async () => {
+    const { orderId, buyerId, productId } = await seedOrder();
+    const [proposal] = await proposeMeetup(orderId, buyerId, tomorrow(), "หน้า BTS อโศก");
+
+    expect(proposal.status).toBe("pending");
+
+    const [msg] = await q<{ text: string; meetup_proposal_id: string; to_user_id: string }>(
+      `select text, meetup_proposal_id, to_user_id from chat_messages where product_id = $1`,
+      [productId]
+    );
+    expect(msg.meetup_proposal_id).toBe(proposal.id);
+    expect(msg.text).toContain("หน้า BTS อโศก");
+
+    // ห้องแชทต้องขึ้นว่ามีข้อความใหม่ให้อีกฝ่าย ไม่งั้นการ์ดนัดจะเงียบอยู่ในห้องที่ไม่มีใครเปิด
+    const [thread] = await q<{ seller_unread_count: number }>(
+      `select seller_unread_count from chat_threads where product_id = $1`,
+      [productId]
+    );
+    expect(Number(thread.seller_unread_count)).toBe(1);
+  });
+
+  // ข้อเสนอล่าสุดคือสิ่งที่อยู่บนโต๊ะเสมอ — ถ้าอันเก่ายังค้าง pending อยู่ อีกฝ่ายจะกดตอบรับเวลาที่
+  // ถูกเปลี่ยนไปแล้วได้ แล้วทั้งคู่จะถือเวลานัดกันคนละเวลา
+  it("เสนอเวลาใหม่ทับ → อันเก่ากลายเป็น superseded ไม่ใช่ declined และเหลือ pending อันเดียว", async () => {
+    const { orderId, buyerId } = await seedOrder();
+    const [first] = await proposeMeetup(orderId, buyerId, tomorrow(), "ที่เดิม");
+    await proposeMeetup(orderId, buyerId, tomorrow(), "ที่ใหม่");
+
+    const rows = await q<ProposalRow>(`select * from meetup_proposals where order_id = $1`, [orderId]);
+    expect(rows.find((r) => r.id === first.id)!.status).toBe("superseded");
+    expect(rows.filter((r) => r.status === "pending")).toHaveLength(1);
+  });
+
+  it("อีกฝ่ายตอบรับ → เขียนนัดลงออเดอร์และเลื่อนสถานะเป็น meetup_scheduled", async () => {
+    const { orderId, buyerId, sellerId } = await seedOrder();
+    const at = tomorrow();
+    const [proposal] = await proposeMeetup(orderId, buyerId, at, "หน้าเซเว่นปากซอย");
+
+    const [answered] = await respondMeetup(proposal.id, sellerId, true);
+    expect(answered.status).toBe("accepted");
+
+    const order = await orderOf(orderId);
+    expect(order.status).toBe("meetup_scheduled");
+    expect(new Date(order.meetup_at!).toISOString()).toBe(new Date(at).toISOString());
+    expect(order.meetup_place).toBe("หน้าเซเว่นปากซอย");
+    expect(order.meetup_confirmed_at).not.toBeNull();
+    expect(order.meetup_proposed_by).toBe(buyerId);
+  });
+
+  // ถ้าคนเสนอกดยืนยันนัดของตัวเองได้ คำว่า "ตกลงนัดกันแล้ว" จะไม่ได้แปลว่าอีกฝ่ายรับรู้ด้วยเลย
+  // และคะแนนมาตามนัดใน Phase 2 จะปั่นได้ฟรีๆ ด้วยการนัดกับตัวเองรัวๆ
+  it("คนเสนอกดยืนยันนัดของตัวเองไม่ได้ และคนนอกก็ตอบแทนไม่ได้", async () => {
+    const { orderId, buyerId } = await seedOrder();
+    const [stranger] = await q<{ id: string }>(
+      `insert into users (name, email, province) values ('คนนอก','x@x.com','เชียงใหม่') returning id`
+    );
+    const [proposal] = await proposeMeetup(orderId, buyerId, tomorrow(), "ที่ไหนสักแห่ง");
+
+    expect(await respondMeetup(proposal.id, buyerId, true)).toHaveLength(0);
+    expect(await respondMeetup(proposal.id, stranger.id, true)).toHaveLength(0);
+
+    const rows = await q<ProposalRow>(`select * from meetup_proposals where id = $1`, [proposal.id]);
+    expect(rows[0].status).toBe("pending");
+    expect((await orderOf(orderId)).status).toBe("reserved");
+  });
+
+  it("ตอบข้อเสนอเดิมซ้ำครั้งที่สองไม่ได้ (compare-and-swap)", async () => {
+    const { orderId, buyerId, sellerId } = await seedOrder();
+    const [proposal] = await proposeMeetup(orderId, buyerId, tomorrow(), "ที่หนึ่ง");
+
+    expect(await respondMeetup(proposal.id, sellerId, true)).toHaveLength(1);
+    expect(await respondMeetup(proposal.id, sellerId, false)).toHaveLength(0);
+  });
+
+  it("ออเดอร์ที่ยกเลิกไปแล้ว เสนอนัดใหม่ไม่ได้ และนัดที่ค้างอยู่ก็ตอบรับไม่ได้", async () => {
+    const { orderId, buyerId, sellerId } = await seedOrder();
+    const [pending] = await proposeMeetup(orderId, buyerId, tomorrow(), "ที่หนึ่ง");
+    await q(`update orders set status = 'cancelled' where id = $1`, [orderId]);
+
+    await expect(proposeMeetup(orderId, buyerId, tomorrow(), "ที่สอง")).rejects.toThrow(/order not open/);
+    expect(await respondMeetup(pending.id, sellerId, true)).toHaveLength(0);
+    expect((await orderOf(orderId)).status).toBe("cancelled");
+  });
+
+  it("คนนอกออเดอร์เสนอนัดไม่ได้ และเวลานัดต้องเป็นอนาคตเสมอ", async () => {
+    const { orderId, buyerId } = await seedOrder();
+    const [stranger] = await q<{ id: string }>(
+      `insert into users (name, email, province) values ('คนนอก','x@x.com','เชียงใหม่') returning id`
+    );
+
+    await expect(proposeMeetup(orderId, stranger.id, tomorrow(), "ที่หนึ่ง")).rejects.toThrow(
+      /not a party/
+    );
+    await expect(
+      proposeMeetup(orderId, buyerId, new Date(Date.now() - 60_000).toISOString(), "ที่หนึ่ง")
+    ).rejects.toThrow(/future/);
+  });
+});

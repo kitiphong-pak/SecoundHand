@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import type { ChatMessage, Offer, User } from "@/types";
+import type { ChatMessage, MeetupProposal, Offer, Order, User } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { callApi, messageOf } from "@/lib/apiResponse";
@@ -13,6 +13,66 @@ const OFFER_BADGE = {
   declined: { label: "ปฏิเสธข้อเสนอนี้แล้ว", status: "error" as const },
   cancelled: { label: "ยกเลิกแล้ว", status: "neutral" as const },
 };
+
+const MEETUP_BADGE = {
+  pending: { label: "รอตอบรับ", status: "pending" as const },
+  accepted: { label: "ตกลงนัดนี้แล้ว", status: "success" as const },
+  declined: { label: "ขอเวลาอื่น", status: "neutral" as const },
+  superseded: { label: "มีนัดใหม่ทับแล้ว", status: "neutral" as const },
+};
+
+// เวลาที่ผู้ใช้เห็นต้องเป็นเวลาไทยเสมอ (ผู้ใช้ทั้งหมดอยู่ในไทย) ส่วนที่เก็บในฐานข้อมูลเป็น UTC
+const formatMeetupAt = (iso: string) =>
+  new Date(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+
+// การ์ดขอนัดเจอ — โครงเดียวกับการ์ดเสนอราคา เพราะเป็นเรื่องเดียวกัน: ข้อเสนอที่อีกฝ่ายต้องตอบ
+// ปุ่มฝั่งที่ถูกเสนอมีสองทางเสมอ "ตกลงตามนี้" กับ "เสนอเวลาอื่น" — ไม่มีปุ่มปฏิเสธเปล่าๆ เพราะ
+// การปฏิเสธเฉยๆ ทำให้บทสนทนาตัน ทั้งที่สิ่งที่คนอยากสื่อจริงๆ คือ "เวลานี้ไม่ว่าง ขอเวลาอื่น"
+function MeetupBubble({
+  meetup,
+  mine,
+  onAccept,
+  onProposeOther,
+  loading,
+}: {
+  meetup: MeetupProposal;
+  mine: boolean;
+  onAccept: () => void;
+  onProposeOther: () => void;
+  loading: boolean;
+}) {
+  const badge = MEETUP_BADGE[meetup.status];
+  const canRespond = !mine && meetup.status === "pending";
+
+  return (
+    <div
+      className={[
+        "max-w-[80%] rounded-[var(--radius-md)] border border-border bg-surface-card px-3.5 py-3 text-sm",
+        mine ? "self-end" : "self-start",
+      ].join(" ")}
+    >
+      <p className="text-xs text-neutral-500">ขอนัดเจอ</p>
+      <p className="mt-0.5 font-medium text-neutral-900">{formatMeetupAt(meetup.meetupAt)} น.</p>
+      <p className="mt-0.5 text-neutral-700">ที่ {meetup.place}</p>
+      <div className="mt-2">
+        <Badge status={badge.status}>{badge.label}</Badge>
+      </div>
+      {canRespond && (
+        <div className="mt-3 flex gap-2">
+          <Button size="sm" variant="primary" disabled={loading} onClick={onAccept}>
+            ตกลงตามนี้
+          </Button>
+          <Button size="sm" variant="secondary" disabled={loading} onClick={onProposeOther}>
+            เสนอเวลาอื่น
+          </Button>
+        </div>
+      )}
+      {mine && meetup.status === "pending" && (
+        <p className="mt-2 text-xs text-neutral-500">รออีกฝ่ายตอบรับ</p>
+      )}
+    </div>
+  );
+}
 
 function OfferBubble({
   offer,
@@ -105,12 +165,19 @@ export function ChatThread({
   const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [order, setOrder] = useState<Order | null>(null);
+  const [meetups, setMeetups] = useState<MeetupProposal[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [showOfferForm, setShowOfferForm] = useState(false);
   const [offerAmount, setOfferAmount] = useState("");
   const [offerError, setOfferError] = useState("");
   const [busyOfferId, setBusyOfferId] = useState<string | null>(null);
+  const [showMeetupForm, setShowMeetupForm] = useState(false);
+  const [meetupAt, setMeetupAt] = useState("");
+  const [meetupPlace, setMeetupPlace] = useState("");
+  const [meetupError, setMeetupError] = useState("");
+  const [busyMeetupId, setBusyMeetupId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -119,6 +186,8 @@ export function ChatThread({
       const data = await res.json();
       setMessages(data.messages);
       setOffers(data.offers ?? []);
+      setOrder(data.order ?? null);
+      setMeetups(data.meetups ?? []);
     }
   };
 
@@ -185,6 +254,67 @@ export function ChatThread({
     }
   };
 
+  const onSubmitMeetup = async (e: FormEvent) => {
+    e.preventDefault();
+    setMeetupError("");
+    if (!order) return;
+    const when = new Date(meetupAt);
+    if (!meetupAt || Number.isNaN(when.getTime())) {
+      setMeetupError("เลือกวันและเวลาที่จะเจอกัน");
+      return;
+    }
+    if (when.getTime() <= Date.now()) {
+      setMeetupError("เวลานัดต้องเป็นเวลาในอนาคต");
+      return;
+    }
+    if (!meetupPlace.trim()) {
+      setMeetupError("ระบุสถานที่นัด เช่น หน้า BTS อโศก ทางออก 3");
+      return;
+    }
+    setSending(true);
+    try {
+      await callApi(
+        `/api/orders/${order.id}/meetup`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ meetupAt: when.toISOString(), place: meetupPlace.trim() }),
+        },
+        "เสนอนัดไม่สำเร็จ"
+      );
+      setMeetupAt("");
+      setMeetupPlace("");
+      setShowMeetupForm(false);
+      load();
+    } catch (err) {
+      setMeetupError(messageOf(err, "เสนอนัดไม่สำเร็จ"));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const onRespondMeetup = async (meetupId: string, accept: boolean) => {
+    setBusyMeetupId(meetupId);
+    setMeetupError("");
+    try {
+      await callApi(
+        `/api/meetups/${meetupId}/respond`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accept }),
+        },
+        "ตอบรับนัดไม่สำเร็จ"
+      );
+      load();
+    } catch (err) {
+      setMeetupError(messageOf(err, "ตอบรับนัดไม่สำเร็จ"));
+      load();
+    } finally {
+      setBusyMeetupId(null);
+    }
+  };
+
   const onRespondOffer = async (offerId: string, accept: boolean) => {
     setBusyOfferId(offerId);
     try {
@@ -230,6 +360,10 @@ export function ChatThread({
   // ข้อตกลงที่ยังมีผลมีได้ครั้งละหนึ่งเดียว (ฐานข้อมูลบังคับไว้ใน migration 017) — ตราบใดที่ยังมี
   // อยู่ ปุ่มเสนอราคาต้องหายไป ไม่ใช่ปล่อยให้กดแล้วค่อยไปเด้ง error กลับมาจากเซิร์ฟเวอร์
   const acceptedOffer = offers.find((o) => o.status === "accepted") ?? null;
+  const meetupById = new Map(meetups.map((m) => [m.id, m]));
+  // นัดได้เฉพาะตอนที่มีการจองแล้วและยังไม่ถึงขั้นส่งมอบ — ก่อนจองยังไม่มีอะไรให้นัด
+  const canProposeMeetup =
+    order !== null && (order.status === "reserved" || order.status === "meetup_scheduled");
 
   return (
     <div className="flex flex-1 flex-col rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0">
@@ -244,9 +378,21 @@ export function ChatThread({
           messages.map((m) => {
             const mine = m.fromUserId === currentUserId;
             const offer = m.offerId ? offerById.get(m.offerId) : undefined;
+            const meetup = m.meetupProposalId ? meetupById.get(m.meetupProposalId) : undefined;
             return (
               <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                {offer ? (
+                {meetup ? (
+                  <MeetupBubble
+                    meetup={meetup}
+                    mine={mine}
+                    loading={busyMeetupId === meetup.id}
+                    onAccept={() => onRespondMeetup(meetup.id, true)}
+                    onProposeOther={async () => {
+                      await onRespondMeetup(meetup.id, false);
+                      setShowMeetupForm(true);
+                    }}
+                  />
+                ) : offer ? (
                   <OfferBubble
                     offer={offer}
                     mine={mine}
@@ -273,6 +419,47 @@ export function ChatThread({
         <div ref={bottomRef} />
       </div>
 
+      {/* นัดที่ตกลงกันแล้ว ปักไว้เหนือช่องพิมพ์ ไม่ต้องเลื่อนหาการ์ดเก่าในประวัติแชท */}
+      {order?.meetupConfirmedAt && order.meetupAt && (
+        <div className="border-t border-neutral-100 bg-success-50 px-3 py-2 text-xs text-neutral-700">
+          นัดแล้ว {formatMeetupAt(order.meetupAt)} น. ที่ {order.meetupPlace}
+        </div>
+      )}
+
+      {meetupError && !showMeetupForm && (
+        <p className="border-t border-neutral-100 px-3 py-2 text-xs text-error-500">{meetupError}</p>
+      )}
+
+      {canProposeMeetup && showMeetupForm && (
+        <form onSubmit={onSubmitMeetup} className="flex flex-col gap-2 border-t border-neutral-100 p-3">
+          <input
+            type="datetime-local"
+            value={meetupAt}
+            onChange={(e) => setMeetupAt(e.target.value)}
+            className="rounded-[var(--radius-md)] border border-neutral-300 px-3.5 py-2.5 text-sm outline-none focus:border-primary-500"
+          />
+          <input
+            value={meetupPlace}
+            onChange={(e) => setMeetupPlace(e.target.value)}
+            maxLength={120}
+            placeholder="สถานที่นัด เช่น หน้า BTS อโศก ทางออก 3"
+            className="rounded-[var(--radius-md)] border border-neutral-300 px-3.5 py-2.5 text-sm outline-none focus:border-primary-500"
+          />
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" variant="primary" disabled={sending}>
+              ส่งคำขอนัด
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setShowMeetupForm(false)}>
+              ยกเลิก
+            </Button>
+          </div>
+          <p className="text-xs text-neutral-400">
+            นัดในที่สาธารณะคนพลุกพล่านเสมอ และดูของให้ครบก่อนจ่ายเงิน
+          </p>
+          {meetupError && <p className="text-xs text-error-500">{meetupError}</p>}
+        </form>
+      )}
+
       {canNegotiate && !acceptedOffer && showOfferForm && (
         <form onSubmit={onSubmitOffer} className="flex flex-col gap-2 border-t border-neutral-100 p-3">
           <div className="flex items-center gap-2">
@@ -298,6 +485,15 @@ export function ChatThread({
       )}
 
       <form onSubmit={onSend} className="flex items-center gap-2 border-t border-neutral-100 p-3">
+        {canProposeMeetup && !showMeetupForm && (
+          <button
+            type="button"
+            onClick={() => setShowMeetupForm(true)}
+            className="flex-none rounded-[var(--radius-md)] border border-border px-3 py-2.5 text-sm text-brand-text hover:bg-brand-surface"
+          >
+            {order?.meetupConfirmedAt ? "เปลี่ยนนัด" : "นัดเจอ"}
+          </button>
+        )}
         {canNegotiate && !acceptedOffer && !showOfferForm && (
           <button
             type="button"

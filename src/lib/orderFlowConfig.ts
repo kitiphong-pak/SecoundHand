@@ -13,6 +13,12 @@ export const RESERVATION_HOLD_MS = 24 * 60 * 60 * 1000; // 24 ชม.
  */
 export const MAX_OPEN_RESERVATIONS_PER_BUYER = 3;
 
+/** นัดล่วงหน้าได้ไกลสุดเท่าไร — กันพิมพ์ปีผิดแล้วสินค้าถูกจองค้างข้ามปี */
+export const MEETUP_MAX_AHEAD_MS = 30 * 24 * 60 * 60 * 1000; // 30 วัน
+
+/** ความยาวสูงสุดของสถานที่นัด — พอสำหรับ "หน้า BTS อโศก ทางออก 3" แต่ไม่ให้ยัดเรียงความลงแชท */
+export const MEETUP_PLACE_MAX_LENGTH = 120;
+
 /** ยกเลิกก่อนเวลานัดน้อยกว่านี้ถือว่ากระชั้นชิด (Phase 2 เอาไปคิดคะแนน) */
 export const LATE_CANCEL_WINDOW_MS = 60 * 60 * 1000; // 1 ชม.
 

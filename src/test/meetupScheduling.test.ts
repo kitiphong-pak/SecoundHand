@@ -1,0 +1,193 @@
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { createSupabaseMock } from "@/test/supabaseMock";
+import { MEETUP_MAX_AHEAD_MS } from "@/lib/orderFlowConfig";
+
+// การนัดเจอคือเหตุการณ์เดียวที่ระบบรู้จักใน flow ใหม่ (ไม่มีเงินไหลผ่านระบบแล้ว) สิ่งที่ต้องกันคือ
+// คนนอกเข้ามายุ่งกับนัดของคนอื่น และการนัดกับออเดอร์ที่จบไปแล้ว — ส่วนตรรกะการตกลงนัดจริงอยู่ใน
+// RPC ระดับฐานข้อมูล (ดู src/test/schema.itest.ts) ที่นี่ตรวจเฉพาะด่านของฝั่งแอป
+const { mock, mockUser, auditCalls } = vi.hoisted(() => ({
+  mock: { current: null as ReturnType<typeof import("@/test/supabaseMock").createSupabaseMock> | null },
+  mockUser: { current: null as { id: string; role: string; name: string } | null },
+  auditCalls: { list: [] as Array<Record<string, unknown>> },
+}));
+
+vi.mock("@/lib/supabase", () => ({
+  get supabase() {
+    return mock.current!.supabase;
+  },
+}));
+vi.mock("@/lib/auth", () => ({ getCurrentUser: async () => mockUser.current }));
+vi.mock("@/lib/auditLog", () => ({
+  logAction: async (entry: Record<string, unknown>) => {
+    auditCalls.list.push(entry);
+  },
+}));
+
+const { POST: propose } = await import("@/app/api/orders/[id]/meetup/route");
+const { POST: respond } = await import("@/app/api/meetups/[id]/respond/route");
+
+const BUYER = { id: "buyer-1", role: "user", name: "ผู้ซื้อ" };
+const SELLER = { id: "seller-1", role: "user", name: "ผู้ขาย" };
+const OUTSIDER = { id: "stranger-1", role: "user", name: "คนนอก" };
+
+const orderRow = (over: Record<string, unknown> = {}) => ({
+  id: "order-1",
+  product_id: "product-1",
+  buyer_id: BUYER.id,
+  seller_id: SELLER.id,
+  status: "reserved",
+  amount: 3500,
+  created_at: "2026-01-01T00:00:00Z",
+  ...over,
+});
+
+const proposalRow = (over: Record<string, unknown> = {}) => ({
+  id: "meetup-1",
+  order_id: "order-1",
+  proposed_by: BUYER.id,
+  meetup_at: "2026-10-01T07:00:00Z",
+  place: "หน้า BTS อโศก ทางออก 3",
+  status: "pending",
+  created_at: "2026-09-23T00:00:00Z",
+  responded_at: null,
+  ...over,
+});
+
+const inDays = (days: number) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+
+const post = (body: unknown) =>
+  new Request("http://localhost/x", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+const orderParams = { params: Promise.resolve({ id: "order-1" }) };
+const meetupParams = { params: Promise.resolve({ id: "meetup-1" }) };
+
+const proposeBody = (over: Record<string, unknown> = {}) => ({
+  meetupAt: inDays(2),
+  place: "หน้า BTS อโศก ทางออก 3",
+  ...over,
+});
+
+beforeEach(() => {
+  mock.current = createSupabaseMock();
+  mockUser.current = BUYER;
+  auditCalls.list = [];
+});
+
+describe("เสนอนัดเจอ", () => {
+  it("ยังไม่ล็อกอิน → 401 และไม่แตะฐานข้อมูลเลย", async () => {
+    mockUser.current = null;
+    const res = await propose(post(proposeBody()), orderParams);
+    expect(res.status).toBe(401);
+    expect(mock.current!.calls).toHaveLength(0);
+  });
+
+  it("คนนอกที่ไม่ใช่คู่ซื้อขาย เสนอนัดในออเดอร์ของคนอื่นไม่ได้ → 403 และต้องไม่เรียก RPC", async () => {
+    mockUser.current = OUTSIDER;
+    mock.current!.queueResult({ data: orderRow(), error: null });
+
+    const res = await propose(post(proposeBody()), orderParams);
+    expect(res.status).toBe(403);
+    expect(mock.current!.rpcCalls).toHaveLength(0);
+  });
+
+  it("ไม่พบออเดอร์ → 404", async () => {
+    mock.current!.queueResult({ data: null, error: null });
+    expect((await propose(post(proposeBody()), orderParams)).status).toBe(404);
+  });
+
+  // ออเดอร์ที่ผู้ขายกดส่งมอบแล้ว/ยกเลิกแล้ว ไม่มีอะไรให้นัดอีก การเปิดช่องไว้แปลว่าออเดอร์ที่จบ
+  // ไปแล้วจะมีการ์ดนัดโผล่ในแชทได้ตลอดกาล
+  it("ออเดอร์ที่ไม่ได้อยู่ในขั้นนัดเจอแล้ว → 409 และต้องไม่เรียก RPC", async () => {
+    for (const status of ["awaiting_buyer_confirmation", "completed", "cancelled"]) {
+      mock.current = createSupabaseMock();
+      mock.current.queueResult({ data: orderRow({ status }), error: null });
+
+      const res = await propose(post(proposeBody()), orderParams);
+      expect(res.status).toBe(409);
+      expect(mock.current.rpcCalls).toHaveLength(0);
+    }
+  });
+
+  it("เวลานัดที่เป็นอดีต หรือไกลเกิน 30 วัน → 400 ตั้งแต่ยังไม่แตะฐานข้อมูล", async () => {
+    for (const meetupAt of [inDays(-1), new Date(Date.now() + MEETUP_MAX_AHEAD_MS + 60_000).toISOString()]) {
+      mock.current = createSupabaseMock();
+      const res = await propose(post(proposeBody({ meetupAt })), orderParams);
+      expect(res.status).toBe(400);
+      expect(mock.current.calls).toHaveLength(0);
+    }
+  });
+
+  it("ไม่ระบุสถานที่ หรือวันเวลาที่อ่านไม่ออก → 400", async () => {
+    for (const body of [proposeBody({ place: "   " }), proposeBody({ meetupAt: "เสาร์นี้" })]) {
+      mock.current = createSupabaseMock();
+      expect((await propose(post(body), orderParams)).status).toBe(400);
+    }
+  });
+
+  it("นัดสำเร็จ → 201 และส่งเวลา/สถานที่ที่ตัดช่องว่างแล้วเข้า RPC", async () => {
+    const meetupAt = inDays(2);
+    mock.current!.queueResult({ data: orderRow(), error: null });
+    mock.current!.queueResult({ data: [proposalRow()], error: null });
+
+    const res = await propose(post(proposeBody({ meetupAt, place: "  ร้านกาแฟหน้าปากซอย  " })), orderParams);
+    expect(res.status).toBe(201);
+    expect(mock.current!.rpcCalls[0].fn).toBe("propose_meetup");
+    expect(mock.current!.rpcCalls[0].args).toEqual({
+      p_order_id: "order-1",
+      p_from_user_id: BUYER.id,
+      p_meetup_at: meetupAt,
+      p_place: "ร้านกาแฟหน้าปากซอย",
+    });
+  });
+
+  // ต่อรองเวลาได้ทั้งสองทางเหมือนต่อรองราคา ไม่ใช่ผู้ซื้อฝ่ายเดียวที่เสนอได้
+  it("ผู้ขายก็เสนอนัดได้เหมือนกัน", async () => {
+    mockUser.current = SELLER;
+    mock.current!.queueResult({ data: orderRow(), error: null });
+    mock.current!.queueResult({ data: [proposalRow({ proposed_by: SELLER.id })], error: null });
+
+    expect((await propose(post(proposeBody()), orderParams)).status).toBe(201);
+  });
+});
+
+describe("ตอบรับ/ปฏิเสธนัด", () => {
+  it("ยังไม่ล็อกอิน → 401", async () => {
+    mockUser.current = null;
+    expect((await respond(post({ accept: true }), meetupParams)).status).toBe(401);
+  });
+
+  // RPC คืนแถวว่างเมื่อ "ตอบไปแล้ว / ไม่มีสิทธิ์ตอบ / คนเสนอกดตอบเอง" — ฝั่งแอปต้องแปลเป็น 409
+  // ไม่ใช่ 200 เงียบๆ ซึ่งจะทำให้ UI ขึ้นว่าตกลงนัดแล้วทั้งที่ฐานข้อมูลไม่ได้เปลี่ยนอะไรเลย
+  it("RPC ไม่โดนแถวไหนเลย → 409 และไม่บันทึก log ว่านัดสำเร็จ", async () => {
+    mock.current!.queueResult({ data: [], error: null });
+
+    const res = await respond(post({ accept: true }), meetupParams);
+    expect(res.status).toBe(409);
+    expect(auditCalls.list).toHaveLength(0);
+  });
+
+  it("ตอบรับสำเร็จ → 200 และบันทึก log ผูกกับออเดอร์", async () => {
+    mock.current!.queueResult({ data: [proposalRow({ status: "accepted" })], error: null });
+    mockUser.current = SELLER;
+
+    const res = await respond(post({ accept: true }), meetupParams);
+    expect(res.status).toBe(200);
+    expect(mock.current!.rpcCalls[0]).toEqual({
+      fn: "respond_meetup",
+      args: { p_proposal_id: "meetup-1", p_responder_id: SELLER.id, p_accept: true },
+    });
+    expect(auditCalls.list[0]).toMatchObject({ action: "order.meetup_scheduled", targetId: "order-1" });
+  });
+
+  it("ปฏิเสธเพื่อขอเวลาอื่น → 200 แต่ไม่บันทึกว่าตกลงนัดกันแล้ว", async () => {
+    mock.current!.queueResult({ data: [proposalRow({ status: "declined" })], error: null });
+    mockUser.current = SELLER;
+
+    const res = await respond(post({ accept: false }), meetupParams);
+    expect(res.status).toBe(200);
+    expect(auditCalls.list).toHaveLength(0);
+  });
+});

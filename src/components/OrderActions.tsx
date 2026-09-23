@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Countdown } from "@/components/Countdown";
@@ -77,11 +78,34 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
       {/* จองแล้ว รอเจอกัน */}
       {(order.status === "reserved" || order.status === "meetup_scheduled") && (
         <>
-          <p className="text-sm text-neutral-600">
-            {role === "seller"
-              ? "นัดวันเวลากับผู้ซื้อในแชท เจอกันแล้วรับเงินสด/PromptPay ได้เลย แล้วกดปุ่มด้านล่าง"
-              : "นัดวันเวลากับผู้ขายในแชท เจอกันแล้วดูของก่อนจ่ายเงินได้เลย"}
-          </p>
+          {/* นัดที่ตกลงกันแล้วเป็นข้อมูลชิ้นที่สำคัญที่สุดของออเดอร์ตอนนี้ — ต้องเห็นทันทีโดยไม่ต้อง
+              เปิดแชทไปเลื่อนหาการ์ดเก่า ส่วนการ "นัด" ยังอยู่ในแชทที่เดียว เพราะมันคือการคุยกัน */}
+          {order.meetupConfirmedAt && order.meetupAt ? (
+            <div className="rounded-[var(--radius-md)] border border-success-500/30 bg-success-50 p-3 text-sm">
+              <p className="font-medium text-neutral-900">
+                นัดเจอ{" "}
+                {new Date(order.meetupAt).toLocaleString("th-TH", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}{" "}
+                น.
+              </p>
+              <p className="mt-0.5 text-neutral-700">ที่ {order.meetupPlace}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-neutral-600">
+              {role === "seller"
+                ? "ยังไม่ได้นัดวันเวลา — กดนัดเจอในแชทได้เลย เจอกันแล้วรับเงินสด/PromptPay ได้ทันที"
+                : "ยังไม่ได้นัดวันเวลา — กดนัดเจอในแชทได้เลย เจอกันแล้วดูของก่อนจ่ายเงิน"}
+            </p>
+          )}
+
+          <Link
+            href={`/chat/${order.productId}?with=${role === "buyer" ? order.sellerId : order.buyerId}`}
+            className="text-sm font-medium text-primary-600 hover:underline"
+          >
+            {order.meetupConfirmedAt ? "เปลี่ยนนัดในแชท →" : "ไปนัดวันเวลาในแชท →"}
+          </Link>
           {role === "seller" && (
             <Button
               disabled={loading}
