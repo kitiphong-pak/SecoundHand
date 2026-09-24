@@ -28,11 +28,19 @@ export interface TimeSuggestion {
 export function findTimeSuggestion(
   messages: ChatMessage[],
   currentUserId: string,
-  now: Date
+  now: Date,
+  /**
+   * เวลาที่มีการเสนอนัดครั้งล่าสุด (ถ้ามี) — ข้อความที่พิมพ์ก่อนหน้านั้นถือว่าจัดการไปแล้ว
+   *
+   * ไม่งั้นทุกครั้งที่เปิดแชท ระบบจะขุดประโยคเก่าที่เคยคุยกันเรื่องเวลาขึ้นมาถามซ้ำ ทั้งที่
+   * คู่สนทนาเสนอนัดกันไปแล้วหลังจากประโยคนั้น
+   */
+  lastProposalAt?: string | null
 ): TimeSuggestion | null {
   for (const m of messages.slice(-TIME_SCAN_DEPTH).reverse()) {
     if (m.fromUserId !== currentUserId) continue;
     if (m.meetupProposalId || m.offerId) continue;
+    if (lastProposalAt && m.createdAt <= lastProposalAt) continue;
     const parsed = parseThaiTime(m.text);
     if (!parsed) continue;
     return {

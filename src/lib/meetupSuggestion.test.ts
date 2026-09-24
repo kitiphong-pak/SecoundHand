@@ -48,6 +48,14 @@ describe("เลือกเวลาที่จะเสนอให้กด�
     expect(findTimeSuggestion(messages, ME, now)!.at.getHours()).toBe(20);
   });
 
+  // อาการที่เจอจริง: เปิดแชทใหม่ทีไรก็โดนถามเรื่องเวลาเดิมซ้ำ ทั้งที่เสนอนัดกันไปแล้ว
+  it("ข้อความที่พิมพ์ก่อนการเสนอนัดครั้งล่าสุด ต้องไม่ถูกขุดมาถามซ้ำ", () => {
+    const messages = [msg({ text: "เจอกันตอน 5 โมงนะ", createdAt: "2026-09-23T10:00:00Z" })];
+    expect(findTimeSuggestion(messages, ME, now, "2026-09-23T10:05:00Z")).toBeNull();
+    // แต่ถ้าพิมพ์เวลาใหม่หลังเสนอนัดไปแล้ว ต้องถามตามปกติ เพราะเป็นการเปลี่ยนใจ
+    expect(findTimeSuggestion(messages, ME, now, "2026-09-23T09:00:00Z")).not.toBeNull();
+  });
+
   it("ข้อความที่ไม่มีเวลาเลย → ไม่เสนออะไร", () => {
     const messages = [msg({ text: "สนใจครับ" }), msg({ text: "ลดเหลือ 500 ได้มั้ย" })];
     expect(findTimeSuggestion(messages, ME, now)).toBeNull();

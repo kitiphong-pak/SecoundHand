@@ -7,7 +7,7 @@ import type { ChatMessage, MeetupProposal, Offer, Order, User } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { callApi, messageOf } from "@/lib/apiResponse";
-import { findTimeSuggestion } from "@/lib/meetupSuggestion";
+import { findTimeSuggestion, TIME_SCAN_DEPTH } from "@/lib/meetupSuggestion";
 import { buildChatRows } from "@/lib/chatGrouping";
 import { orderStatusBadge } from "@/lib/orderStatus";
 
@@ -236,8 +236,34 @@ export function ChatThread({
   const [meetupError, setMeetupError] = useState("");
   const [busyMeetupId, setBusyMeetupId] = useState<string | null>(null);
   // ข้อความที่ระบบอ่านเวลาได้แล้วผู้ใช้จัดการไปแล้ว (กดใช้หรือกดปิด) — ไม่ต้องเสนอซ้ำอีก
-  const [handledTimeMessageId, setHandledTimeMessageId] = useState<string | null>(null);
+  //
+  // ต้องจำข้ามการเปิดหน้า ไม่งั้นกด "ไม่ใช่" ไปแล้วพอเปิดแชทใหม่ก็โดนถามเรื่องเดิมซ้ำทุกครั้ง
+  // เก็บแยกตามห้องแชท และตัดให้เหลือเท่าที่จำเป็น เพราะข้อความเก่ากว่านั้นไม่มีวันถูกเสนออีกแล้ว
+  const [handledTimeIds, setHandledTimeIds] = useState<string[]>([]);
   const [recentPlaces, setRecentPlaces] = useState<string[]>([]);
+  const handledStorageKey = `songtor.chat.handledTime.${productId}.${otherUser.id}`;
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(handledStorageKey);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (saved) setHandledTimeIds(JSON.parse(saved) as string[]);
+    } catch {
+      // อ่านไม่ได้ก็แค่ถามใหม่อีกครั้ง ไม่ใช่เรื่องที่ต้องแจ้งผู้ใช้
+    }
+  }, [handledStorageKey]);
+
+  const markTimeHandled = (messageId: string) => {
+    setHandledTimeIds((current) => {
+      const next = [...current.filter((id) => id !== messageId), messageId].slice(-TIME_SCAN_DEPTH * 2);
+      try {
+        localStorage.setItem(handledStorageKey, JSON.stringify(next));
+      } catch {
+        // จำไม่ได้ก็ยังใช้งานต่อได้ในรอบนี้
+      }
+      return next;
+    });
+  };
   // เริ่มต้นพับไว้ก่อน — กางแล้วเบียดพื้นที่อ่านข้อความ คนที่อยากได้ค่อยกดเปิดแล้วระบบจะจำไว้ให้
   const [panel, setPanel] = useState<PanelTab | null>(null);
 
@@ -460,10 +486,18 @@ export function ChatThread({
   const canProposeMeetup =
     order !== null && (order.status === "reserved" || order.status === "meetup_scheduled");
 
+  const lastProposalAt =
+    meetups.length > 0
+      ? [...meetups].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0].createdAt
+      : null;
+
   // อ่านเวลานัดจากข้อความที่ "เราเป็นคนพิมพ์" เท่านั้น — ดูกติกาทั้งหมดใน meetupSuggestion.ts
   const detectedTime = useMemo(
-    () => (canProposeMeetup ? findTimeSuggestion(messages, currentUserId, new Date()) : null),
-    [messages, currentUserId, canProposeMeetup]
+    () =>
+      canProposeMeetup
+        ? findTimeSuggestion(messages, currentUserId, new Date(), lastProposalAt)
+        : null,
+    [messages, currentUserId, canProposeMeetup, lastProposalAt]
   );
 
   // ชิปกับฟอร์มลอยอยู่ตำแหน่งเดียวกัน จึงต้องไม่โผล่พร้อมกัน
@@ -471,7 +505,7 @@ export function ChatThread({
     detectedTime !== null &&
     !showMeetupForm &&
     !showOfferForm &&
-    detectedTime.messageId !== handledTimeMessageId;
+    !handledTimeIds.includes(detectedTime.messageId);
 
   // สถานที่ที่ใช้อยู่ตอนนี้ — นัดที่ตกลงกันแล้วมาก่อน ถ้ายังไม่มีก็เอาจากข้อเสนอล่าสุดที่เคยพิมพ์ไป
   const currentPlace =
@@ -651,7 +685,7 @@ export function ChatThread({
           <button
             type="button"
             onClick={() => {
-              setHandledTimeMessageId(detectedTime.messageId);
+              markTimeHandled(detectedTime.messageId);
               openMeetupForm(detectedTime.at);
             }}
             className="rounded-[var(--radius-sm)] bg-primary-500 px-2.5 py-1 font-medium text-white hover:bg-primary-600"
@@ -660,7 +694,7 @@ export function ChatThread({
           </button>
           <button
             type="button"
-            onClick={() => setHandledTimeMessageId(detectedTime.messageId)}
+            onClick={() => markTimeHandled(detectedTime.messageId)}
             className="text-neutral-400 underline"
           >
             ไม่ใช่
