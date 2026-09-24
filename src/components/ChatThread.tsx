@@ -2,12 +2,24 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { ChatMessage, MeetupProposal, Offer, Order, User } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { callApi, messageOf } from "@/lib/apiResponse";
 import { findTimeSuggestion } from "@/lib/meetupSuggestion";
 import { buildChatRows } from "@/lib/chatGrouping";
+import { orderStatusBadge } from "@/lib/orderStatus";
+
+/** แผงขวาสลับได้ว่าจะดูอะไร — เริ่มจากสองอันนี้ก่อน เพิ่มทีหลังได้โดยไม่ต้องแตะที่อื่น */
+const PANEL_TABS = [
+  { key: "product" as const, label: "สินค้า" },
+  { key: "meetup" as const, label: "นัดเจอ" },
+];
+type PanelTab = (typeof PANEL_TABS)[number]["key"];
+
+/** จำไว้ว่าผู้ใช้พับแผงขวาไว้หรือเปิดค้างไว้ — ของแบบนี้ถ้าลืมทุกครั้งที่เปลี่ยนห้องจะน่ารำคาญมาก */
+const PANEL_STORAGE_KEY = "songtor.chat.panel";
 
 // ค่าที่ input type="datetime-local" ต้องการคือเวลาท้องถิ่นรูปแบบ YYYY-MM-DDTHH:mm — ใช้ toISOString
 // ไม่ได้เพราะนั่นเป็น UTC ซึ่งจะเพี้ยนไป 7 ชั่วโมงสำหรับผู้ใช้ในไทย
@@ -194,6 +206,7 @@ export function ChatThread({
   productId,
   currentUserId,
   otherUser,
+  product,
   productPrice,
   isSeller,
   canNegotiate,
@@ -201,6 +214,7 @@ export function ChatThread({
   productId: string;
   currentUserId: string;
   otherUser: Pick<User, "id" | "name" | "avatarUrl">;
+  product: { id: string; title: string; image: string | null };
   productPrice: number;
   isSeller: boolean;
   canNegotiate: boolean;
@@ -224,6 +238,28 @@ export function ChatThread({
   // ข้อความที่ระบบอ่านเวลาได้แล้วผู้ใช้จัดการไปแล้ว (กดใช้หรือกดปิด) — ไม่ต้องเสนอซ้ำอีก
   const [handledTimeMessageId, setHandledTimeMessageId] = useState<string | null>(null);
   const [recentPlaces, setRecentPlaces] = useState<string[]>([]);
+  const [panel, setPanel] = useState<PanelTab | null>("product");
+
+  // อ่านค่าที่เคยเลือกไว้หลัง mount (ไม่ใช่ตอน render แรก) เพื่อไม่ให้ HTML ฝั่งเซิร์ฟเวอร์กับ
+  // ฝั่งเบราว์เซอร์ไม่ตรงกัน — localStorage อ่านได้เฉพาะบนเบราว์เซอร์
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(PANEL_STORAGE_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (saved === "hidden") setPanel(null);
+      else if (saved === "meetup" || saved === "product") setPanel(saved);
+    } catch {
+      // เบราว์เซอร์บล็อก storage ไว้ก็ใช้ค่าเริ่มต้นไป ไม่ใช่เรื่องที่ต้องแจ้งผู้ใช้
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PANEL_STORAGE_KEY, panel ?? "hidden");
+    } catch {
+      // เหมือนด้านบน จำไม่ได้ก็ไม่เป็นไร
+    }
+  }, [panel]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -413,6 +449,7 @@ export function ChatThread({
     .reverse()
     .find((m) => m.fromUserId === currentUserId && m.read)?.id;
 
+  const orderBadge = orderStatusBadge(order?.status ?? "reserved", isSeller ? "seller" : "buyer");
   const offerById = new Map(offers.map((o) => [o.id, o]));
   // ข้อตกลงที่ยังมีผลมีได้ครั้งละหนึ่งเดียว (ฐานข้อมูลบังคับไว้ใน migration 017) — ตราบใดที่ยังมี
   // อยู่ ปุ่มเสนอราคาต้องหายไป ไม่ใช่ปล่อยให้กดแล้วค่อยไปเด้ง error กลับมาจากเซิร์ฟเวอร์
@@ -457,10 +494,26 @@ export function ChatThread({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0">
+    <div className="flex min-h-0 flex-1 gap-4">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0">
       <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-3">
         <Avatar user={otherUser} />
-        <span className="text-sm font-medium text-neutral-900">{otherUser.name}</span>
+        <span className="flex-1 truncate text-sm font-medium text-neutral-900">{otherUser.name}</span>
+        {/* ปุ่มพับ/กางแผงขวา — โชว์เฉพาะจอที่กว้างพอจะมีแผงข้างได้จริง จอแคบกว่านั้นแผงไม่เคยโผล่อยู่แล้ว */}
+        <button
+          type="button"
+          onClick={() => setPanel(panel ? null : "product")}
+          aria-label={panel ? "ซ่อนแผงรายละเอียด" : "แสดงแผงรายละเอียด"}
+          className="hidden h-8 w-8 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 xl:flex"
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true">
+            {panel ? (
+              <path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7l1.4-1.4 6.3 6.3 6.3-6.3z" />
+            ) : (
+              <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2zm0-8h-2V7h2z" />
+            )}
+          </svg>
+        </button>
       </div>
 
       {/* นัดที่ตกลงกันแล้วกับชิปถามเวลาลอยคนละมุม (บนสุด / ล่างสุด) ตั้งใจให้อยู่ไกลกันไปเลย —
@@ -747,6 +800,138 @@ export function ChatThread({
         </button>
       </form>
       </div>
+    </div>
+
+    {/* แผงขวา: พับเก็บได้ และสลับได้ว่าจะดูอะไร — อยู่ในคอมโพเนนต์นี้เพราะแท็บ "นัดเจอ" ใช้ข้อมูล
+        ออเดอร์/ข้อเสนอนัดและปุ่มเปิดฟอร์มชุดเดียวกับในแชท ไม่ต้องไปดึงข้อมูลซ้ำอีกรอบ */}
+    {panel && (
+      <aside className="hidden w-72 min-h-0 flex-none flex-col overflow-hidden rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 xl:flex">
+        <div className="flex border-b border-neutral-100">
+          {PANEL_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setPanel(tab.key)}
+              className={`flex-1 px-3 py-2.5 text-sm ${
+                panel === tab.key
+                  ? "border-b-2 border-primary-500 font-medium text-primary-600"
+                  : "text-neutral-500 hover:text-neutral-700"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {panel === "product" ? (
+            <div className="flex flex-col gap-3">
+              {product.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={product.image}
+                  alt={product.title}
+                  className="h-32 w-full rounded-[var(--radius-md)] object-cover"
+                />
+              ) : (
+                <div className="flex h-32 w-full items-center justify-center rounded-[var(--radius-md)] bg-neutral-100 text-xs text-neutral-400">
+                  ไม่มีรูปภาพ
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-medium text-neutral-900">{product.title}</p>
+                <p className="mt-0.5 font-[var(--font-display)] text-lg font-semibold text-primary-600">
+                  ฿{productPrice.toLocaleString("th-TH")}
+                </p>
+              </div>
+              {order && (
+                <div className="rounded-[var(--radius-md)] border border-neutral-200 p-3">
+                  <p className="text-xs text-neutral-400">ออเดอร์</p>
+                  <div className="mt-1">
+                    <Badge status={orderBadge.status}>{orderBadge.label}</Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-neutral-700">
+                    ยอด ฿{order.amount.toLocaleString("th-TH")}
+                  </p>
+                  <Link
+                    href={`/orders/${order.id}`}
+                    className="mt-2 inline-block text-sm font-medium text-primary-600 hover:underline"
+                  >
+                    เปิดหน้าออเดอร์ →
+                  </Link>
+                </div>
+              )}
+              <Link
+                href={`/products/${product.id}`}
+                className="text-sm font-medium text-primary-600 hover:underline"
+              >
+                ดูหน้าสินค้า →
+              </Link>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {!canProposeMeetup ? (
+                <p className="text-sm text-neutral-500">
+                  {order
+                    ? "ออเดอร์นี้ไม่ได้อยู่ในขั้นตอนนัดเจอแล้ว"
+                    : "ยังไม่มีการจอง — นัดเจอได้หลังผู้ซื้อกดจองสินค้าแล้ว"}
+                </p>
+              ) : (
+                <>
+                  <div className="rounded-[var(--radius-md)] border border-neutral-200 p-3">
+                    <p className="text-xs text-neutral-400">นัดที่ตกลงกันแล้ว</p>
+                    {order?.meetupConfirmedAt && order.meetupAt ? (
+                      <>
+                        <p className="mt-1 text-sm font-medium text-neutral-900">
+                          {formatMeetupAt(order.meetupAt)} น.
+                        </p>
+                        <p className="mt-0.5 text-sm text-neutral-700">ที่ {order.meetupPlace}</p>
+                      </>
+                    ) : (
+                      <p className="mt-1 text-sm text-neutral-400">ยังไม่ได้นัด</p>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="mt-3"
+                      onClick={() => openMeetupForm()}
+                    >
+                      {order?.meetupConfirmedAt ? "เปลี่ยนนัด" : "นัดเจอ"}
+                    </Button>
+                  </div>
+
+                  {meetups.length > 0 && (
+                    <div>
+                      <p className="mb-1 text-xs text-neutral-400">ประวัติข้อเสนอนัด</p>
+                      <ul className="flex flex-col gap-2">
+                        {[...meetups]
+                          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+                          .map((mp) => (
+                            <li
+                              key={mp.id}
+                              className="rounded-[var(--radius-md)] border border-neutral-200 p-2 text-xs"
+                            >
+                              <p className="text-neutral-700">
+                                {mp.meetupAt ? `${formatMeetupAt(mp.meetupAt)} น.` : "ยังไม่ระบุเวลา"}
+                              </p>
+                              <p className="text-neutral-500">ที่ {mp.place}</p>
+                              <p className="mt-1">
+                                <Badge status={MEETUP_BADGE[mp.status].status}>
+                                  {MEETUP_BADGE[mp.status].label}
+                                </Badge>
+                              </p>
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </aside>
+    )}
     </div>
   );
 }

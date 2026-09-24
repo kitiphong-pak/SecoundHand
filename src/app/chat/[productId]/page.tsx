@@ -1,14 +1,9 @@
 import { notFound, redirect } from "next/navigation";
-import Image from "next/image";
-import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { orderStatusBadge } from "@/lib/orderStatus";
 import { Header } from "@/components/Header";
 import { ChatThread } from "@/components/ChatThread";
 import { ChatInbox } from "@/components/ChatInbox";
-import { Badge } from "@/components/ui/Badge";
-import type { OrderStatus } from "@/types";
 
 export default async function ChatPage({
   params,
@@ -69,19 +64,6 @@ export default async function ChatPage({
     .maybeSingle();
   if (!otherUser) notFound();
 
-  // ออเดอร์ที่ยังเดินอยู่ของคู่นี้ในสินค้านี้ (ถ้ามี) — ใช้โชว์ในแผงขวา ให้เห็นสถานะโดยไม่ต้องออกจากแชท
-  const { data: orderRow } = await supabase
-    .from("orders")
-    .select("id, status, amount")
-    .eq("product_id", productId)
-    .in("buyer_id", [user.id, withUserId])
-    .in("seller_id", [user.id, withUserId])
-    .not("status", "in", "(cancelled)")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const role: "buyer" | "seller" = product.seller_id === user.id ? "seller" : "buyer";
-  const orderBadge = orderRow ? orderStatusBadge(orderRow.status as OrderStatus, role) : null;
   const productImage = (product.images as string[] | null)?.[0] ?? null;
 
   return (
@@ -115,60 +97,13 @@ export default async function ChatPage({
               name: otherUser.name,
               avatarUrl: (otherUser.avatar_url as string | null) ?? undefined,
             }}
+            product={{ id: productId, title: product.title, image: productImage }}
             productPrice={Number(product.price)}
             isSeller={product.seller_id === user.id}
             canNegotiate={product.status === "listed"}
           />
         </section>
 
-        {/* แผงขวา: ของที่ต้องเหลือบดูระหว่างคุย โดยไม่ต้องออกจากแชทไปเปิดหน้าอื่น */}
-        <aside className="hidden w-72 min-h-0 flex-none flex-col gap-3 overflow-y-auto rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-4 xl:flex">
-          <p className="text-xs text-neutral-400">คุยกันเรื่องสินค้า</p>
-          {productImage ? (
-            <Image
-              src={productImage}
-              alt={product.title}
-              width={240}
-              height={160}
-              className="h-32 w-full rounded-[var(--radius-md)] object-cover"
-            />
-          ) : (
-            <div className="flex h-32 w-full items-center justify-center rounded-[var(--radius-md)] bg-neutral-100 text-xs text-neutral-400">
-              ไม่มีรูปภาพ
-            </div>
-          )}
-          <div>
-            <p className="text-sm font-medium text-neutral-900">{product.title}</p>
-            <p className="mt-0.5 font-[var(--font-display)] text-lg font-semibold text-primary-600">
-              ฿{Number(product.price).toLocaleString("th-TH")}
-            </p>
-          </div>
-
-          {orderBadge && orderRow && (
-            <div className="rounded-[var(--radius-md)] border border-neutral-200 p-3">
-              <p className="text-xs text-neutral-400">ออเดอร์</p>
-              <div className="mt-1">
-                <Badge status={orderBadge.status}>{orderBadge.label}</Badge>
-              </div>
-              <p className="mt-2 text-sm text-neutral-700">
-                ยอด ฿{Number(orderRow.amount).toLocaleString("th-TH")}
-              </p>
-              <Link
-                href={`/orders/${orderRow.id}`}
-                className="mt-2 inline-block text-sm font-medium text-primary-600 hover:underline"
-              >
-                เปิดหน้าออเดอร์ →
-              </Link>
-            </div>
-          )}
-
-          <Link
-            href={`/products/${productId}`}
-            className="text-sm font-medium text-primary-600 hover:underline"
-          >
-            ดูหน้าสินค้า →
-          </Link>
-        </aside>
       </main>
     </div>
   );
