@@ -67,11 +67,16 @@ export function LoginForm({ next }: { next: string }) {
           </Link>
         </p>
 
-        <div className="mt-8 rounded-[var(--radius-md)] bg-neutral-100 p-3 text-xs text-neutral-500">
-          <p className="font-medium text-neutral-700">บัญชีทดสอบ (เดโม)</p>
-          <p className="mt-1">อีเมล: pimchanok@example.com — รหัสผ่าน: password123</p>
-          <p>แอดมิน: admin@secoundhand.demo — รหัสผ่าน: password123</p>
-        </div>
+        {/* บัญชีทดสอบโชว์เฉพาะตอนพัฒนาเท่านั้น — ถ้าติดไปกับของจริงคือการแจกรหัสผ่านแอดมิน
+            ให้คนทั้งอินเทอร์เน็ต แต่ลบทิ้งไปเลยก็ทำให้ทดสอบในเครื่องลำบากโดยไม่ได้อะไรเพิ่ม
+            ค่านี้ถูกแทนที่ตอน build ของ Next ก้อนโค้ดนี้จึงไม่ติดไปใน bundle ของ production */}
+        {process.env.NODE_ENV !== "production" && (
+          <div className="mt-8 rounded-[var(--radius-md)] bg-neutral-100 p-3 text-xs text-neutral-500">
+            <p className="font-medium text-neutral-700">บัญชีทดสอบ (เฉพาะตอนพัฒนา)</p>
+            <p className="mt-1">อีเมล: pimchanok@example.com — รหัสผ่าน: password123</p>
+            <p>แอดมิน: admin@secoundhand.demo — รหัสผ่าน: password123</p>
+          </div>
+        )}
       </div>
     </main>
   );

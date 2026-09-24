@@ -74,6 +74,18 @@ export function RegisterForm({ next }: { next: string }) {
           <Button type="submit" disabled={submitting} className="mt-2">
             {submitting ? "กำลังสมัคร..." : "สมัครสมาชิก"}
           </Button>
+
+          {/* บอกตอนที่กำลังจะให้ข้อมูล ไม่ใช่ซ่อนไว้ให้ไปหาเอง — และต้องกดอ่านได้จากตรงนี้เลย */}
+          <p className="text-center text-xs text-neutral-500">
+            การสมัครถือว่าคุณยอมรับ{" "}
+            <Link href="/terms" className="font-medium text-primary-600 hover:underline">
+              เงื่อนไขการใช้งาน
+            </Link>{" "}
+            และ{" "}
+            <Link href="/privacy" className="font-medium text-primary-600 hover:underline">
+              นโยบายความเป็นส่วนตัว
+            </Link>
+          </p>
         </form>
 
         <p className="mt-6 text-center text-sm text-neutral-500">
