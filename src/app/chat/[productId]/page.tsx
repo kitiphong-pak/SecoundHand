@@ -58,23 +58,28 @@ export default async function ChatPage({
   // ขึ้นมาไว้ในหน่วยความจำเลยตั้งแต่ต้น กัน hash หลุดไปกับ RSC payload ถ้ามีคนแก้โค้ดพลาดอนาคต
   const { data: otherUser } = await supabase
     .from("users")
-    .select("id, name")
+    .select("id, name, avatar_url")
     .eq("id", withUserId)
     .maybeSingle();
   if (!otherUser) notFound();
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-neutral-50">
+    // ให้แชทสูงเต็มพื้นที่ที่เหลือของจอ แทนกล่องความสูงตายตัวที่ทำให้มีสกรอลล์ซ้อนสกรอลล์สองชั้น
+    <div className="flex h-[100dvh] flex-col bg-neutral-50">
       <Header user={user} />
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-5 py-6">
-        <div className="mb-3">
+      <main className="mx-auto flex w-full max-w-lg min-h-0 flex-1 flex-col px-5 pt-4 pb-4">
+        <div className="mb-2">
           <p className="text-xs text-neutral-400">แชทเกี่ยวกับ</p>
           <p className="text-sm font-medium text-neutral-900">{product.title}</p>
         </div>
         <ChatThread
           productId={productId}
           currentUserId={user.id}
-          otherUser={otherUser}
+          otherUser={{
+            id: otherUser.id,
+            name: otherUser.name,
+            avatarUrl: (otherUser.avatar_url as string | null) ?? undefined,
+          }}
           productPrice={Number(product.price)}
           isSeller={product.seller_id === user.id}
           canNegotiate={product.status === "listed"}

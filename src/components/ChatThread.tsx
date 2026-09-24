@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { callApi, messageOf } from "@/lib/apiResponse";
 import { findTimeSuggestion } from "@/lib/meetupSuggestion";
+import { buildChatRows } from "@/lib/chatGrouping";
 
 // ค่าที่ input type="datetime-local" ต้องการคือเวลาท้องถิ่นรูปแบบ YYYY-MM-DDTHH:mm — ใช้ toISOString
 // ไม่ได้เพราะนั่นเป็น UTC ซึ่งจะเพี้ยนไป 7 ชั่วโมงสำหรับผู้ใช้ในไทย
@@ -32,6 +33,29 @@ const MEETUP_BADGE = {
 // เวลาที่ผู้ใช้เห็นต้องเป็นเวลาไทยเสมอ (ผู้ใช้ทั้งหมดอยู่ในไทย) ส่วนที่เก็บในฐานข้อมูลเป็น UTC
 const formatMeetupAt = (iso: string) =>
   new Date(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+
+// รูปโปรไฟล์คู่สนทนา — ยังไม่มีรูปก็ใช้ตัวอักษรแรกของชื่อแทน จะได้ไม่มีช่องว่างโบ๋ข้างฟองข้อความ
+function Avatar({ user }: { user: Pick<User, "id" | "name" | "avatarUrl"> }) {
+  if (user.avatarUrl) {
+    // ใช้ img ธรรมดาเพราะรูปมาจากโดเมนของผู้ใช้เอง และขนาดคงที่ 28px ไม่ได้ต้องการการย่อรูปของ next/image
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={user.avatarUrl}
+        alt={user.name}
+        className="h-7 w-7 flex-none rounded-full object-cover"
+      />
+    );
+  }
+  return (
+    <div className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-neutral-200 text-xs font-medium text-neutral-600">
+      {user.name.trim().charAt(0)}
+    </div>
+  );
+}
 
 // การ์ดขอนัดเจอ — โครงเดียวกับการ์ดเสนอราคา เพราะเป็นเรื่องเดียวกัน: ข้อเสนอที่อีกฝ่ายต้องตอบ
 // ปุ่มฝั่งที่ถูกเสนอมีสองทางเสมอ "ตกลงตามนี้" กับ "เสนอเวลาอื่น" — ไม่มีปุ่มปฏิเสธเปล่าๆ เพราะ
@@ -176,7 +200,7 @@ export function ChatThread({
 }: {
   productId: string;
   currentUserId: string;
-  otherUser: Pick<User, "id" | "name">;
+  otherUser: Pick<User, "id" | "name" | "avatarUrl">;
   productPrice: number;
   isSeller: boolean;
   canNegotiate: boolean;
@@ -201,6 +225,7 @@ export function ChatThread({
   const [handledTimeMessageId, setHandledTimeMessageId] = useState<string | null>(null);
   const [recentPlaces, setRecentPlaces] = useState<string[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const load = async () => {
     const res = await fetch(`/api/chat/${productId}?with=${otherUser.id}`);
@@ -226,7 +251,7 @@ export function ChatThread({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  const onSend = async (e: FormEvent) => {
+  const onSend = async (e: { preventDefault: () => void }) => {
     e.preventDefault();
     if (!text.trim()) return;
     setSending(true);
@@ -237,6 +262,7 @@ export function ChatThread({
         body: JSON.stringify({ toUserId: otherUser.id, text }),
       });
       setText("");
+      if (inputRef.current) inputRef.current.style.height = "auto";
       load();
     } finally {
       setSending(false);
@@ -379,6 +405,14 @@ export function ChatThread({
     }
   };
 
+  // เส้นคั่นวันและการจัดกลุ่มข้อความคำนวณที่เดียวใน chatGrouping.ts (มีเทสคุม) ที่นี่แค่เอามาวาด
+  const rows = useMemo(() => buildChatRows(messages, new Date()), [messages]);
+
+  // "อ่านแล้ว" โชว์ใบเดียวพอ — ใบล่าสุดที่เราส่งแล้วอีกฝ่ายอ่านแล้ว ถ้าโชว์ทุกใบจะรกและไม่ได้บอกอะไรเพิ่ม
+  const lastReadMineId = [...messages]
+    .reverse()
+    .find((m) => m.fromUserId === currentUserId && m.read)?.id;
+
   const offerById = new Map(offers.map((o) => [o.id, o]));
   // ข้อตกลงที่ยังมีผลมีได้ครั้งละหนึ่งเดียว (ฐานข้อมูลบังคับไว้ใน migration 017) — ตราบใดที่ยังมี
   // อยู่ ปุ่มเสนอราคาต้องหายไป ไม่ใช่ปล่อยให้กดแล้วค่อยไปเด้ง error กลับมาจากเซิร์ฟเวอร์
@@ -423,9 +457,10 @@ export function ChatThread({
   };
 
   return (
-    <div className="flex flex-1 flex-col rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0">
-      <div className="border-b border-neutral-100 px-4 py-3 text-sm font-medium text-neutral-900">
-        {otherUser.name}
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-lg)] border border-neutral-200 bg-neutral-0">
+      <div className="flex items-center gap-2 border-b border-neutral-100 px-4 py-3">
+        <Avatar user={otherUser} />
+        <span className="text-sm font-medium text-neutral-900">{otherUser.name}</span>
       </div>
 
       {/* นัดที่ตกลงกันแล้วกับชิปถามเวลาลอยคนละมุม (บนสุด / ล่างสุด) ตั้งใจให้อยู่ไกลกันไปเลย —
@@ -441,51 +476,87 @@ export function ChatThread({
 
       {/* เว้นที่หัวท้ายไว้ให้แถบที่ลอยอยู่ ไม่บังข้อความแรกสุด/ล่าสุดตอนเลื่อนไปสุดทาง */}
       <div
-        className={`flex flex-1 flex-col gap-2 overflow-y-auto px-4 pb-12 ${
+        className={`flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-12 ${
           order?.meetupConfirmedAt ? "pt-12" : "pt-4"
         }`}
-        style={{ minHeight: 320, maxHeight: 480 }}
       >
-        {messages.length === 0 ? (
+        {rows.length === 0 ? (
           <p className="mt-8 text-center text-sm text-neutral-400">เริ่มทักทายกันได้เลย</p>
         ) : (
-          messages.map((m) => {
+          rows.map((row) => {
+            if (row.kind === "date") {
+              return (
+                <div key={row.key} className="my-3 flex justify-center">
+                  <span className="rounded-full bg-neutral-100 px-3 py-1 text-[11px] text-neutral-500">
+                    {row.label}
+                  </span>
+                </div>
+              );
+            }
+
+            const m = row.message;
             const mine = m.fromUserId === currentUserId;
             const offer = m.offerId ? offerById.get(m.offerId) : undefined;
             const meetup = m.meetupProposalId ? meetupById.get(m.meetupProposalId) : undefined;
+            const card = meetup ? (
+              <MeetupBubble
+                meetup={meetup}
+                mine={mine}
+                loading={busyMeetupId === meetup.id}
+                onAccept={() => onRespondMeetup(meetup.id, true)}
+                onProposeOther={async () => {
+                  await onRespondMeetup(meetup.id, false);
+                  openMeetupForm();
+                }}
+              />
+            ) : offer ? (
+              <OfferBubble
+                offer={offer}
+                mine={mine}
+                isSeller={isSeller}
+                loading={busyOfferId === offer.id}
+                onRespond={(accept) => onRespondOffer(offer.id, accept)}
+                onBuy={() => onBuyWithOffer(offer)}
+                onCancelAgreement={() => onCancelAgreement(offer.id)}
+              />
+            ) : null;
+
             return (
-              <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                {meetup ? (
-                  <MeetupBubble
-                    meetup={meetup}
-                    mine={mine}
-                    loading={busyMeetupId === meetup.id}
-                    onAccept={() => onRespondMeetup(meetup.id, true)}
-                    onProposeOther={async () => {
-                      await onRespondMeetup(meetup.id, false);
-                      openMeetupForm();
-                    }}
-                  />
-                ) : offer ? (
-                  <OfferBubble
-                    offer={offer}
-                    mine={mine}
-                    isSeller={isSeller}
-                    loading={busyOfferId === offer.id}
-                    onRespond={(accept) => onRespondOffer(offer.id, accept)}
-                    onBuy={() => onBuyWithOffer(offer)}
-                    onCancelAgreement={() => onCancelAgreement(offer.id)}
-                  />
-                ) : (
-                  <div
-                    className={[
-                      "max-w-[75%] rounded-[var(--radius-md)] px-3.5 py-2 text-sm",
-                      mine ? "bg-primary-500 text-white" : "bg-neutral-100 text-neutral-900",
-                    ].join(" ")}
-                  >
-                    {m.text}
-                  </div>
-                )}
+              <div
+                key={row.key}
+                className={`flex items-end gap-2 ${row.startsGroup ? "mt-3" : "mt-0.5"} ${
+                  mine ? "justify-end" : "justify-start"
+                }`}
+              >
+                {/* รูปโปรไฟล์เกาะอยู่กับข้อความ "ใบสุดท้าย" ของกลุ่มแบบเดียวกับแอปแชททั่วไป
+                    ใบอื่นในกลุ่มเว้นที่ว่างขนาดเท่ากันไว้ ฟองจะได้เรียงตรงกันเป็นแนวเดียว */}
+                {!mine &&
+                  (row.endsGroup ? (
+                    <Avatar user={otherUser} />
+                  ) : (
+                    <div className="h-7 w-7 flex-none" />
+                  ))}
+
+                <div className={`flex max-w-[75%] flex-col ${mine ? "items-end" : "items-start"}`}>
+                  {card ?? (
+                    <div
+                      className={[
+                        "px-3.5 py-2 text-sm whitespace-pre-wrap break-words",
+                        mine
+                          ? `bg-primary-500 text-white ${row.endsGroup ? "rounded-2xl rounded-br-sm" : "rounded-2xl"}`
+                          : `bg-neutral-100 text-neutral-900 ${row.endsGroup ? "rounded-2xl rounded-bl-sm" : "rounded-2xl"}`,
+                      ].join(" ")}
+                    >
+                      {m.text}
+                    </div>
+                  )}
+                  {row.endsGroup && (
+                    <p className="mt-1 px-1 text-[11px] text-neutral-400">
+                      {formatTime(m.createdAt)}
+                      {m.id === lastReadMineId && " · อ่านแล้ว"}
+                    </p>
+                  )}
+                </div>
               </div>
             );
           })
@@ -636,18 +707,36 @@ export function ChatThread({
             เสนอราคา
           </button>
         )}
-        <input
+        {/* textarea แทน input เพื่อให้พิมพ์ข้อความหลายบรรทัดได้ และสูงตามเนื้อหาจนถึงเพดานหนึ่ง
+            Enter = ส่ง, Shift+Enter = ขึ้นบรรทัดใหม่ ตามที่คนคุ้นจากแอปแชททั่วไป */}
+        <textarea
+          ref={inputRef}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          rows={1}
+          onChange={(e) => {
+            setText(e.target.value);
+            const el = e.target;
+            el.style.height = "auto";
+            el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              onSend(e);
+            }
+          }}
           placeholder="พิมพ์ข้อความ..."
-          className="flex-1 rounded-[var(--radius-md)] border border-neutral-300 px-3.5 py-2.5 text-sm outline-none focus:border-primary-500"
+          className="max-h-[120px] flex-1 resize-none rounded-[var(--radius-xl)] border border-neutral-300 px-4 py-2.5 text-sm outline-none focus:border-primary-500"
         />
         <button
           type="submit"
           disabled={sending || !text.trim()}
-          className="rounded-[var(--radius-md)] bg-primary-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-600 disabled:bg-neutral-200"
+          aria-label="ส่งข้อความ"
+          className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-primary-500 text-white hover:bg-primary-600 disabled:bg-neutral-200"
         >
-          ส่ง
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true">
+            <path d="M3.4 20.4 21 12 3.4 3.6 3.4 10.2 15 12 3.4 13.8z" />
+          </svg>
         </button>
       </form>
       </div>
