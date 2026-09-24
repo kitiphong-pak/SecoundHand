@@ -526,20 +526,28 @@ export function ChatThread({
             return (
               <div
                 key={row.key}
-                className={`flex items-end gap-2 ${row.startsGroup ? "mt-3" : "mt-0.5"} ${
+                className={`flex items-start gap-2 ${row.startsGroup ? "mt-3" : "mt-0.5"} ${
                   mine ? "justify-end" : "justify-start"
                 }`}
               >
-                {/* รูปโปรไฟล์เกาะอยู่กับข้อความ "ใบสุดท้าย" ของกลุ่มแบบเดียวกับแอปแชททั่วไป
-                    ใบอื่นในกลุ่มเว้นที่ว่างขนาดเท่ากันไว้ ฟองจะได้เรียงตรงกันเป็นแนวเดียว */}
+                {/* รูปโปรไฟล์เกาะอยู่กับข้อความ "ใบแรก" ของกลุ่ม ตรงกับบรรทัดชื่อ ส่วนใบถัดๆ ไปเว้น
+                    ที่ว่างขนาดเท่ากันไว้ ฟองจะได้เรียงตรงกันเป็นแนวเดียว */}
                 {!mine &&
-                  (row.endsGroup ? (
+                  (row.startsGroup ? (
                     <Avatar user={otherUser} />
                   ) : (
                     <div className="h-7 w-7 flex-none" />
                   ))}
 
                 <div className={`flex max-w-[75%] flex-col ${mine ? "items-end" : "items-start"}`}>
+                  {/* ชื่อกับเวลาอยู่เหนือกลุ่ม ไม่ใช่ใต้ทุกฟอง — อ่านรวดเดียวได้ว่าใครพูดตอนไหน
+                      และไม่มีตัวเลขแทรกระหว่างฟองในกลุ่มเดียวกัน */}
+                  {row.startsGroup && (
+                    <p className="mb-1 flex items-center gap-2 px-1 text-[11px] text-neutral-400">
+                      {!mine && <span className="font-medium text-neutral-600">{otherUser.name}</span>}
+                      <span>{formatTime(m.createdAt)}</span>
+                    </p>
+                  )}
                   {card ?? (
                     <div
                       className={[
@@ -552,11 +560,8 @@ export function ChatThread({
                       {m.text}
                     </div>
                   )}
-                  {row.endsGroup && (
-                    <p className="mt-1 px-1 text-[11px] text-neutral-400">
-                      {formatTime(m.createdAt)}
-                      {m.id === lastReadMineId && " · อ่านแล้ว"}
-                    </p>
+                  {m.id === lastReadMineId && (
+                    <p className="mt-1 px-1 text-[11px] text-neutral-400">อ่านแล้ว</p>
                   )}
                 </div>
               </div>
