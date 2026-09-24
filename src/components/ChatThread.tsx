@@ -238,7 +238,8 @@ export function ChatThread({
   // ข้อความที่ระบบอ่านเวลาได้แล้วผู้ใช้จัดการไปแล้ว (กดใช้หรือกดปิด) — ไม่ต้องเสนอซ้ำอีก
   const [handledTimeMessageId, setHandledTimeMessageId] = useState<string | null>(null);
   const [recentPlaces, setRecentPlaces] = useState<string[]>([]);
-  const [panel, setPanel] = useState<PanelTab | null>("product");
+  // เริ่มต้นพับไว้ก่อน — กางแล้วเบียดพื้นที่อ่านข้อความ คนที่อยากได้ค่อยกดเปิดแล้วระบบจะจำไว้ให้
+  const [panel, setPanel] = useState<PanelTab | null>(null);
 
   // อ่านค่าที่เคยเลือกไว้หลัง mount (ไม่ใช่ตอน render แรก) เพื่อไม่ให้ HTML ฝั่งเซิร์ฟเวอร์กับ
   // ฝั่งเบราว์เซอร์ไม่ตรงกัน — localStorage อ่านได้เฉพาะบนเบราว์เซอร์
