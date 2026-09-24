@@ -67,6 +67,11 @@ export interface Order {
   // ตอบรับใน MeetupProposal เก็บซ้ำไว้บนออเดอร์เพื่อให้อ่าน "ตกลงนัดกันเมื่อไหร่" ได้จากที่เดียว
   meetupAt?: string;
   meetupPlace?: string;
+  /** พิกัดของจุดนัด — จุดนัดมาจากการปักหมุดบนแผนที่เสมอ (migration 025) */
+  meetupLat?: number;
+  meetupLng?: number;
+  /** รายละเอียดจุดนัดที่หมุดบอกไม่ได้ เช่น "ตรงป้ายรถเมล์" */
+  meetupPlaceNote?: string;
   meetupProposedBy?: string;
   meetupConfirmedAt?: string;
   completedAt?: string;
@@ -116,7 +121,11 @@ export interface MeetupProposal {
   proposedBy: string;
   /** ว่างได้ — ตกลงสถานที่ก่อนแล้วค่อยเคาะเวลาทีหลังได้ ออเดอร์จะยังไม่นับว่า "นัดเจอแล้ว" */
   meetupAt?: string;
-  place: string;
+  /** ว่างได้เช่นกัน — เสนอเฉพาะเวลาโดยใช้ที่นัดเดิมก็ได้ (ต้องมีอย่างน้อยหนึ่งอย่าง) */
+  place?: string;
+  lat?: number;
+  lng?: number;
+  placeNote?: string;
   status: MeetupProposalStatus;
   createdAt: string;
   respondedAt?: string;

@@ -65,9 +65,12 @@ const post = (body: unknown) =>
 const orderParams = { params: Promise.resolve({ id: "order-1" }) };
 const meetupParams = { params: Promise.resolve({ id: "meetup-1" }) };
 
+// จุดนัดมาจากการปักหมุดบนแผนที่เสมอ (migration 025) ชื่อสถานที่จึงมาคู่กับพิกัดทุกครั้ง
 const proposeBody = (over: Record<string, unknown> = {}) => ({
   meetupAt: inDays(2),
   place: "หน้า BTS อโศก ทางออก 3",
+  lat: 13.7373,
+  lng: 100.5602,
   ...over,
 });
 
@@ -121,11 +124,43 @@ describe("เสนอนัดเจอ", () => {
     }
   });
 
-  it("ไม่ระบุสถานที่ หรือวันเวลาที่อ่านไม่ออก → 400", async () => {
-    for (const body of [proposeBody({ place: "   " }), proposeBody({ meetupAt: "เสาร์นี้" })]) {
+  it("ไม่ระบุทั้งเวลาและสถานที่ หรือวันเวลาที่อ่านไม่ออก → 400", async () => {
+    for (const body of [
+      proposeBody({ place: "   ", lat: null, lng: null, meetupAt: "" }),
+      proposeBody({ meetupAt: "เสาร์นี้" }),
+    ]) {
       mock.current = createSupabaseMock();
       expect((await propose(post(body), orderParams)).status).toBe(400);
     }
+  });
+
+  // ถ้าชื่อสถานที่หลุดมาได้โดยไม่มีพิกัด แปลว่ามาจากทางอื่นที่ไม่ใช่การปักหมุด ซึ่งไม่ใช่สิ่งที่ตั้งใจให้มี
+  it("ส่งชื่อสถานที่มาโดยไม่มีพิกัด → 400 ไม่แตะฐานข้อมูล", async () => {
+    const res = await propose(post(proposeBody({ lat: null, lng: null })), orderParams);
+    expect(res.status).toBe(400);
+    expect(mock.current!.calls).toHaveLength(0);
+  });
+
+  it("พิกัดนอกช่วงที่เป็นไปได้ → 400", async () => {
+    for (const bad of [{ lat: 95, lng: 100 }, { lat: 13, lng: 200 }]) {
+      mock.current = createSupabaseMock();
+      expect((await propose(post(proposeBody(bad)), orderParams)).status).toBe(400);
+    }
+  });
+
+  // หน้าจอแยกปุ่ม "ปักหมุด" กับ "เลือกเวลา" ออกจากกันแล้ว เสนอทีละอย่างต้องได้
+  it("เสนอเฉพาะเวลา (ไม่ส่งสถานที่) → 201 และส่ง place เป็น null", async () => {
+    mock.current!.queueResult({ data: orderRow(), error: null });
+    mock.current!.queueResult({ data: [proposalRow({ place: null })], error: null });
+
+    const res = await propose(
+      post({ meetupAt: inDays(1), place: "", lat: null, lng: null }),
+      orderParams
+    );
+    expect(res.status).toBe(201);
+    const args = mock.current!.rpcCalls[0].args as Record<string, unknown>;
+    expect(args.p_place).toBeNull();
+    expect(args.p_meetup_at).not.toBeNull();
   });
 
   it("นัดสำเร็จ → 201 และส่งเวลา/สถานที่ที่ตัดช่องว่างแล้วเข้า RPC", async () => {
@@ -141,6 +176,9 @@ describe("เสนอนัดเจอ", () => {
       p_from_user_id: BUYER.id,
       p_meetup_at: meetupAt,
       p_place: "ร้านกาแฟหน้าปากซอย",
+      p_lat: 13.7373,
+      p_lng: 100.5602,
+      p_place_note: null,
     });
   });
 
@@ -200,44 +238,51 @@ describe("นัดที่ยังไม่ระบุเวลา", () => {
     mock.current!.queueResult({ data: orderRow(), error: null });
     mock.current!.queueResult({ data: [proposalRow({ meetup_at: null })], error: null });
 
-    const res = await propose(post({ place: "หน้าห้าง" }), orderParams);
+    const res = await propose(
+      post({ place: "หน้าห้าง", lat: 18.8, lng: 98.97 }),
+      orderParams
+    );
     expect(res.status).toBe(201);
     expect((mock.current!.rpcCalls[0].args as { p_meetup_at: unknown }).p_meetup_at).toBeNull();
-  });
-
-  it("ไม่มีสถานที่ ถึงจะมีเวลา ก็ยังไม่ผ่าน → 400", async () => {
-    const res = await propose(post({ meetupAt: inDays(1), place: "" }), orderParams);
-    expect(res.status).toBe(400);
-    expect(mock.current!.calls).toHaveLength(0);
   });
 
   // ต่างจาก "ไม่ใส่เวลา" ตรงที่ใส่มาแล้วแต่อ่านไม่ออก — ต้องบอกว่าผิด ไม่ใช่ปัดทิ้งเงียบๆ
   // แล้วกลายเป็นนัดที่ไม่มีเวลาโดยที่คนส่งคิดว่าตั้งเวลาไปแล้ว
   it("ใส่เวลามาแต่อ่านไม่ออก → 400 ไม่ใช่ปัดเวลาทิ้งแล้วบันทึกต่อ", async () => {
-    const res = await propose(post({ meetupAt: "เสาร์นี้", place: "หน้าห้าง" }), orderParams);
+    const res = await propose(
+      post({ meetupAt: "เสาร์นี้", place: "หน้าห้าง", lat: 18.8, lng: 98.97 }),
+      orderParams
+    );
     expect(res.status).toBe(400);
     expect(mock.current!.rpcCalls).toHaveLength(0);
   });
 });
 
 describe("ปุ่มลัดสถานที่ที่เคยนัด", () => {
-  it("ตัดสถานที่ซ้ำออก เหลือ 3 อันล่าสุด และดูเฉพาะของตัวเอง", async () => {
+  it("ตัดสถานที่ซ้ำออก เหลือ 3 อันล่าสุด พร้อมพิกัด และดูเฉพาะของตัวเอง", async () => {
     mock.current!.queueResult({
       data: [
-        { place: "หน้า BTS อโศก", created_at: "2026-09-20T00:00:00Z" },
-        { place: "หน้า BTS อโศก", created_at: "2026-09-19T00:00:00Z" },
-        { place: "หน้าเซเว่นปากซอย", created_at: "2026-09-18T00:00:00Z" },
-        { place: "Maya ชั้น 1", created_at: "2026-09-17T00:00:00Z" },
-        { place: "หน้ามหาลัย", created_at: "2026-09-16T00:00:00Z" },
+        { place: "หน้า BTS อโศก", lat: 13.7, lng: 100.5, created_at: "2026-09-20T00:00:00Z" },
+        { place: "หน้า BTS อโศก", lat: 13.7, lng: 100.5, created_at: "2026-09-19T00:00:00Z" },
+        { place: "หน้าเซเว่นปากซอย", lat: 18.8, lng: 98.9, created_at: "2026-09-18T00:00:00Z" },
+        { place: "Maya ชั้น 1", lat: 18.801, lng: 98.967, created_at: "2026-09-17T00:00:00Z" },
+        { place: "หน้ามหาลัย", lat: 18.8, lng: 98.95, created_at: "2026-09-16T00:00:00Z" },
       ],
       error: null,
     });
 
     const res = await places();
     expect(await res.json()).toEqual({
-      places: ["หน้า BTS อโศก", "หน้าเซเว่นปากซอย", "Maya ชั้น 1"],
+      places: [
+        { place: "หน้า BTS อโศก", lat: 13.7, lng: 100.5 },
+        { place: "หน้าเซเว่นปากซอย", lat: 18.8, lng: 98.9 },
+        { place: "Maya ชั้น 1", lat: 18.801, lng: 98.967 },
+      ],
     });
-    expect(hasOp(mock.current!.callsTo("meetup_proposals")[0], "eq", "proposed_by", BUYER.id)).toBe(true);
+    const call = mock.current!.callsTo("meetup_proposals")[0];
+    expect(hasOp(call, "eq", "proposed_by", BUYER.id)).toBe(true);
+    // จุดที่ไม่มีพิกัด (ของก่อน migration 025) เอามาทำปุ่มลัดไม่ได้ กดแล้วไม่รู้จะย้ายหมุดไปไหน
+    expect(hasOp(call, "not", "lat", "is", null)).toBe(true);
   });
 
   it("ยังไม่ล็อกอิน → 401", async () => {

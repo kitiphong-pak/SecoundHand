@@ -14,15 +14,32 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const body = await req.json().catch(() => null);
   const place = String(body?.place ?? "").trim();
+  const placeNote = String(body?.placeNote ?? "").trim();
+  const lat = body?.lat == null ? null : Number(body.lat);
+  const lng = body?.lng == null ? null : Number(body.lng);
   const meetupAtRaw = String(body?.meetupAt ?? "");
   const meetupAt = new Date(meetupAtRaw);
 
-  if (!place) return NextResponse.json({ error: "กรุณาระบุสถานที่นัด" }, { status: 400 });
-  if (place.length > MEETUP_PLACE_MAX_LENGTH) {
+  // ตั้งแต่ migration 025 หน้าจอแยกเป็น "ปักหมุด" กับ "เลือกเวลา" คนละปุ่ม ข้อเสนอหนึ่งใบจึงมีแค่
+  // อย่างใดอย่างหนึ่งก็ได้ แต่ว่างทั้งคู่ไม่ได้ เพราะไม่ได้เสนออะไรเลย
+  if (!place && meetupAtRaw === "") {
+    return NextResponse.json({ error: "ต้องระบุอย่างน้อยเวลานัดหรือจุดนัด" }, { status: 400 });
+  }
+  if (place.length > MEETUP_PLACE_MAX_LENGTH || placeNote.length > MEETUP_PLACE_MAX_LENGTH) {
     return NextResponse.json(
       { error: `สถานที่นัดยาวได้ไม่เกิน ${MEETUP_PLACE_MAX_LENGTH} ตัวอักษร` },
       { status: 400 }
     );
+  }
+  // จุดนัดมาจากการปักหมุดบนแผนที่เสมอ ชื่อสถานที่ที่ไม่มีพิกัดกำกับแปลว่ามาจากทางอื่นที่ไม่ตั้งใจให้มี
+  if (place && (lat === null || lng === null)) {
+    return NextResponse.json({ error: "จุดนัดต้องเลือกจากแผนที่" }, { status: 400 });
+  }
+  if (
+    (lat !== null && (!Number.isFinite(lat) || lat < -90 || lat > 90)) ||
+    (lng !== null && (!Number.isFinite(lng) || lng < -180 || lng > 180))
+  ) {
+    return NextResponse.json({ error: "พิกัดจุดนัดไม่ถูกต้อง" }, { status: 400 });
   }
   // เวลาไม่ใส่มาก็ได้ — คนมักตกลงสถานที่ได้ก่อนแล้วค่อยเคาะเวลาทีหลัง บังคับให้กรอกก่อนมีแต่จะได้
   // เวลามั่วๆ ที่อีกฝ่ายเชื่อ แต่ถ้าใส่มาแล้วอ่านไม่ออกถือว่าผิด ไม่ใช่ปัดทิ้งเงียบๆ กลายเป็นนัดไร้เวลา
@@ -56,7 +73,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     p_order_id: id,
     p_from_user_id: user.id,
     p_meetup_at: hasTime ? meetupAt.toISOString() : null,
-    p_place: place,
+    p_place: place || null,
+    p_lat: lat,
+    p_lng: lng,
+    p_place_note: placeNote || null,
   });
   const row = (data as Record<string, unknown>[] | null)?.[0];
   if (error || !row) return NextResponse.json({ error: "เสนอนัดไม่สำเร็จ" }, { status: 500 });

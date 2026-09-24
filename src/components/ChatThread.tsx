@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import type { ChatMessage, MeetupProposal, Offer, Order, User } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -10,6 +11,13 @@ import { callApi, messageOf } from "@/lib/apiResponse";
 import { findTimeSuggestion, TIME_SCAN_DEPTH } from "@/lib/meetupSuggestion";
 import { buildChatRows } from "@/lib/chatGrouping";
 import { orderStatusBadge } from "@/lib/orderStatus";
+
+// Leaflet แตะ window ตั้งแต่ตอน import จึงโหลดเฉพาะฝั่งเบราว์เซอร์ และโหลดตอนเปิดแผ่นแผนที่เท่านั้น
+// ไม่ต้องลากไปอยู่ใน bundle ของทุกคนที่แค่เปิดแชทเฉยๆ
+const MapPicker = dynamic(() => import("@/components/MapPicker").then((m) => m.MapPicker), {
+  ssr: false,
+  loading: () => <p className="py-6 text-center text-sm text-neutral-400">กำลังเปิดแผนที่…</p>,
+});
 
 /** แผงขวาสลับได้ว่าจะดูอะไร — เริ่มจากสองอันนี้ก่อน เพิ่มทีหลังได้โดยไม่ต้องแตะที่อื่น */
 const PANEL_TABS = [
@@ -230,9 +238,9 @@ export function ChatThread({
   const [offerAmount, setOfferAmount] = useState("");
   const [offerError, setOfferError] = useState("");
   const [busyOfferId, setBusyOfferId] = useState<string | null>(null);
-  const [showMeetupForm, setShowMeetupForm] = useState(false);
+  // แยกเป็นสองแผ่น เพราะตอนนี้ "เวลา" กับ "จุดนัด" เป็นคนละปุ่มและคนละวิธีเลือก
+  const [sheet, setSheet] = useState<"time" | "place" | null>(null);
   const [meetupAt, setMeetupAt] = useState("");
-  const [meetupPlace, setMeetupPlace] = useState("");
   const [meetupError, setMeetupError] = useState("");
   const [busyMeetupId, setBusyMeetupId] = useState<string | null>(null);
   // ข้อความที่ระบบอ่านเวลาได้แล้วผู้ใช้จัดการไปแล้ว (กดใช้หรือกดปิด) — ไม่ต้องเสนอซ้ำอีก
@@ -240,7 +248,7 @@ export function ChatThread({
   // ต้องจำข้ามการเปิดหน้า ไม่งั้นกด "ไม่ใช่" ไปแล้วพอเปิดแชทใหม่ก็โดนถามเรื่องเดิมซ้ำทุกครั้ง
   // เก็บแยกตามห้องแชท และตัดให้เหลือเท่าที่จำเป็น เพราะข้อความเก่ากว่านั้นไม่มีวันถูกเสนออีกแล้ว
   const [handledTimeIds, setHandledTimeIds] = useState<string[]>([]);
-  const [recentPlaces, setRecentPlaces] = useState<string[]>([]);
+  const [recentPlaces, setRecentPlaces] = useState<Array<{ place: string; lat: number; lng: number }>>([]);
   const handledStorageKey = `songtor.chat.handledTime.${productId}.${otherUser.id}`;
 
   useEffect(() => {
@@ -365,24 +373,16 @@ export function ChatThread({
     }
   };
 
-  const onSubmitMeetup = async (e: FormEvent) => {
-    e.preventDefault();
-    setMeetupError("");
+  // ส่งข้อเสนอนัดหนึ่งใบ — เวลาอย่างเดียว จุดนัดอย่างเดียว หรือทั้งคู่ก็ได้ (ดู migration 025)
+  const sendMeetup = async (payload: {
+    meetupAt?: string | null;
+    place?: string | null;
+    lat?: number | null;
+    lng?: number | null;
+    placeNote?: string | null;
+  }) => {
     if (!order) return;
-    // สถานที่คือสิ่งเดียวที่ขาดไม่ได้ ส่วนเวลาจะเคาะทีหลังก็ได้ (ดู migration 024)
-    if (!meetupPlace.trim()) {
-      setMeetupError("ระบุสถานที่นัด เช่น หน้า BTS อโศก ทางออก 3");
-      return;
-    }
-    const when = meetupAt ? new Date(meetupAt) : null;
-    if (when && Number.isNaN(when.getTime())) {
-      setMeetupError("อ่านวันและเวลาที่เลือกไม่ออก");
-      return;
-    }
-    if (when && when.getTime() <= Date.now()) {
-      setMeetupError("เวลานัดต้องเป็นเวลาในอนาคต");
-      return;
-    }
+    setMeetupError("");
     setSending(true);
     try {
       await callApi(
@@ -390,19 +390,32 @@ export function ChatThread({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ meetupAt: when ? when.toISOString() : null, place: meetupPlace.trim() }),
+          body: JSON.stringify(payload),
         },
         "เสนอนัดไม่สำเร็จ"
       );
       setMeetupAt("");
-      setMeetupPlace("");
-      setShowMeetupForm(false);
+      setSheet(null);
       load();
     } catch (err) {
       setMeetupError(messageOf(err, "เสนอนัดไม่สำเร็จ"));
     } finally {
       setSending(false);
     }
+  };
+
+  const onSubmitTime = (e: FormEvent) => {
+    e.preventDefault();
+    const when = meetupAt ? new Date(meetupAt) : null;
+    if (!when || Number.isNaN(when.getTime())) {
+      setMeetupError("เลือกวันและเวลาที่จะเจอกัน");
+      return;
+    }
+    if (when.getTime() <= Date.now()) {
+      setMeetupError("เวลานัดต้องเป็นเวลาในอนาคต");
+      return;
+    }
+    void sendMeetup({ meetupAt: when.toISOString() });
   };
 
   const onRespondMeetup = async (meetupId: string, accept: boolean) => {
@@ -503,28 +516,35 @@ export function ChatThread({
   // ชิปกับฟอร์มลอยอยู่ตำแหน่งเดียวกัน จึงต้องไม่โผล่พร้อมกัน
   const showTimeChip =
     detectedTime !== null &&
-    !showMeetupForm &&
+    sheet === null &&
     !showOfferForm &&
     !handledTimeIds.includes(detectedTime.messageId);
 
-  // สถานที่ที่ใช้อยู่ตอนนี้ — นัดที่ตกลงกันแล้วมาก่อน ถ้ายังไม่มีก็เอาจากข้อเสนอล่าสุดที่เคยพิมพ์ไป
-  const currentPlace =
-    order?.meetupPlace ??
-    [...meetups].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.place ??
-    "";
+  // นัดที่ใช้อยู่ตอนนี้ — เอาไว้ตั้งค่าเริ่มต้นให้ทั้งหมุดบนแผนที่และช่องเลือกเวลา จะได้ไม่ต้องเริ่มใหม่
+  // จากศูนย์ทุกครั้งที่แค่อยากขยับอย่างใดอย่างหนึ่ง
+  const currentMeetupAt = order?.meetupAt ? toDateTimeLocal(new Date(order.meetupAt)) : "";
+  const currentPin =
+    order?.meetupLat != null && order?.meetupLng != null
+      ? { lat: order.meetupLat, lng: order.meetupLng, label: order.meetupPlace ?? "" }
+      : null;
 
-  const openMeetupForm = async (prefillAt?: Date) => {
-    if (prefillAt) setMeetupAt(toDateTimeLocal(prefillAt));
-    // เปลี่ยนแค่เวลาไม่ต้องเลือกสถานที่ใหม่ — เติมที่เดิมไว้ให้ ใครจะย้ายที่ก็แก้ในช่องได้เหมือนเดิม
-    setMeetupPlace((current) => current || currentPlace);
-    setShowMeetupForm(true);
+  const openTimeSheet = (prefillAt?: Date) => {
+    setMeetupAt(prefillAt ? toDateTimeLocal(prefillAt) : meetupAt || currentMeetupAt);
     setMeetupError("");
-    // ปุ่มลัดสถานที่ดึงตอนเปิดฟอร์มเท่านั้น ไม่ผูกไปกับ poll ของแชทที่ยิงทุก 4 วินาที
+    setSheet("time");
+  };
+
+  const openPlaceSheet = async () => {
+    setMeetupError("");
+    setSheet("place");
+    // จุดที่เคยนัดดึงตอนเปิดแผนที่เท่านั้น ไม่ผูกไปกับ poll ของแชทที่ยิงทุก 4 วินาที
     try {
-      const data = await callApi<{ places: string[] }>("/api/meetups/places");
+      const data = await callApi<{ places: Array<{ place: string; lat: number; lng: number }> }>(
+        "/api/meetups/places"
+      );
       setRecentPlaces(data.places ?? []);
     } catch {
-      // ไม่มีปุ่มลัดก็พิมพ์เองได้ ไม่ใช่เรื่องที่ต้องขึ้น error ให้ตกใจ
+      // ไม่มีปุ่มลัดก็ปักหมุดเองได้ ไม่ใช่เรื่องที่ต้องขึ้น error ให้ตกใจ
     }
   };
 
@@ -596,7 +616,7 @@ export function ChatThread({
                 onAccept={() => onRespondMeetup(meetup.id, true)}
                 onProposeOther={async () => {
                   await onRespondMeetup(meetup.id, false);
-                  openMeetupForm();
+                  openTimeSheet();
                 }}
               />
             ) : offer ? (
@@ -665,7 +685,7 @@ export function ChatThread({
           สายตาและหน้าทั้งหน้าจะกระโดด ยึดที่ bottom-full ของกล่องนี้ จึงอยู่เหนือช่องพิมพ์พอดีเสมอ */}
       <div className="relative">
       <div className="absolute inset-x-0 bottom-full z-10 flex flex-col overflow-hidden rounded-t-[var(--radius-lg)] shadow-[0_-8px_24px_rgba(0,0,0,0.12)]">
-        {meetupError && !showMeetupForm && (
+        {meetupError && sheet === null && (
           <p className="border-t border-neutral-200 bg-neutral-0 px-3 py-2 text-xs text-error-500">
             {meetupError}
           </p>
@@ -686,7 +706,7 @@ export function ChatThread({
             type="button"
             onClick={() => {
               markTimeHandled(detectedTime.messageId);
-              openMeetupForm(detectedTime.at);
+              openTimeSheet(detectedTime.at);
             }}
             className="rounded-[var(--radius-sm)] bg-primary-500 px-2.5 py-1 font-medium text-white hover:bg-primary-600"
           >
@@ -703,57 +723,50 @@ export function ChatThread({
       )}
       </div>
 
-      {canProposeMeetup && showMeetupForm && (
+      {/* แผ่นเลือกเวลา — อ่านเวลาจากแชทได้ (ผ่านชิป) และเลือกเองได้จากตัวเลือกวันเวลาของเบราว์เซอร์ */}
+      {canProposeMeetup && sheet === "time" && (
         <form
-          onSubmit={onSubmitMeetup}
-          className="sheet-in absolute inset-x-0 bottom-full z-20 flex max-h-[60vh] flex-col gap-2 overflow-y-auto rounded-t-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.12)]"
+          onSubmit={onSubmitTime}
+          className="sheet-in absolute inset-x-0 bottom-full z-20 flex flex-col gap-2 rounded-t-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.12)]"
         >
+          <p className="text-xs text-neutral-500">เลือกวันและเวลานัด</p>
           <input
             type="datetime-local"
             value={meetupAt}
             onChange={(e) => setMeetupAt(e.target.value)}
             className="rounded-[var(--radius-md)] border border-neutral-300 px-3.5 py-2.5 text-sm outline-none focus:border-primary-500"
           />
-          {/* คนขายของมือสองมักนัดที่เดิมซ้ำๆ — ปุ่มลัดตัดการพิมพ์ใหม่ทุกครั้งออก */}
-          {recentPlaces.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {recentPlaces.map((place) => (
-                <button
-                  key={place}
-                  type="button"
-                  onClick={() => setMeetupPlace(place)}
-                  className="rounded-full border border-border px-2.5 py-1 text-xs text-brand-text hover:bg-brand-surface"
-                >
-                  {place}
-                </button>
-              ))}
-            </div>
-          )}
-          <input
-            value={meetupPlace}
-            onChange={(e) => setMeetupPlace(e.target.value)}
-            maxLength={120}
-            placeholder="สถานที่นัด เช่น หน้า BTS อโศก ทางออก 3"
-            className="rounded-[var(--radius-md)] border border-neutral-300 px-3.5 py-2.5 text-sm outline-none focus:border-primary-500"
-          />
-          {!meetupAt && (
+          {!order?.meetupPlace && (
             <p className="text-center text-xs text-neutral-400">
-              อย่าลืมนัดหมายเวลาเพื่อนัดรับ-ส่งสินค้า
+              อย่าลืมปักหมุดจุดนัดด้วย จะได้รู้ว่าเจอกันตรงไหน
             </p>
           )}
           <div className="flex gap-2">
             <Button type="submit" size="sm" variant="primary" disabled={sending}>
-              ส่งคำขอนัด
+              ส่งเวลานี้
             </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setShowMeetupForm(false)}>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setSheet(null)}>
               ยกเลิก
             </Button>
           </div>
-          <p className="text-xs text-neutral-400">
-            นัดในที่สาธารณะคนพลุกพล่านเสมอ และดูของให้ครบก่อนจ่ายเงิน
-          </p>
           {meetupError && <p className="text-xs text-error-500">{meetupError}</p>}
         </form>
+      )}
+
+      {/* แผ่นเลือกจุดนัด — ปักหมุดบนแผนที่เท่านั้น ไม่ให้พิมพ์ชื่อลอยๆ ที่ระบบเอาไปใช้ต่อไม่ได้ */}
+      {canProposeMeetup && sheet === "place" && (
+        <div className="sheet-in absolute inset-x-0 bottom-full z-20 flex max-h-[70vh] flex-col gap-2 overflow-y-auto rounded-t-[var(--radius-lg)] border border-neutral-200 bg-neutral-0 p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.12)]">
+          <MapPicker
+            initial={currentPin}
+            recentPlaces={recentPlaces}
+            sending={sending}
+            onCancel={() => setSheet(null)}
+            onConfirm={(p) =>
+              void sendMeetup({ place: p.label, lat: p.lat, lng: p.lng, placeNote: p.note || null })
+            }
+          />
+          {meetupError && <p className="text-xs text-error-500">{meetupError}</p>}
+        </div>
       )}
 
       {canNegotiate && !acceptedOffer && showOfferForm && (
@@ -784,14 +797,31 @@ export function ChatThread({
       )}
 
       <form onSubmit={onSend} className="flex items-center gap-2 border-t border-neutral-100 p-3">
-        {canProposeMeetup && !showMeetupForm && (
-          <button
-            type="button"
-            onClick={() => openMeetupForm()}
-            className="flex-none rounded-[var(--radius-md)] border border-border px-3 py-2.5 text-sm text-brand-text hover:bg-brand-surface"
-          >
-            {order?.meetupConfirmedAt ? "เปลี่ยนนัด" : "นัดเจอ"}
-          </button>
+        {canProposeMeetup && sheet === null && (
+          <>
+            <button
+              type="button"
+              onClick={openPlaceSheet}
+              aria-label="เลือกจุดนัดบนแผนที่"
+              title="เลือกจุดนัดบนแผนที่"
+              className="flex h-10 w-10 flex-none items-center justify-center rounded-full border border-border text-brand-text hover:bg-brand-surface"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true">
+                <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => openTimeSheet()}
+              aria-label="เลือกวันและเวลานัด"
+              title="เลือกวันและเวลานัด"
+              className="flex h-10 w-10 flex-none items-center justify-center rounded-full border border-border text-brand-text hover:bg-brand-surface"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden="true">
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 10.6V6h-2v7.4l5.2 3.1 1-1.7z" />
+              </svg>
+            </button>
+          </>
         )}
         {canNegotiate && !acceptedOffer && !showOfferForm && (
           <button
@@ -921,18 +951,33 @@ export function ChatThread({
                           {formatMeetupAt(order.meetupAt)} น.
                         </p>
                         <p className="mt-0.5 text-sm text-neutral-700">ที่ {order.meetupPlace}</p>
+                        {order.meetupPlaceNote && (
+                          <p className="text-xs text-neutral-500">({order.meetupPlaceNote})</p>
+                        )}
+                        {order.meetupLat != null && order.meetupLng != null && (
+                          // เปิดแผนที่นำทางต่อได้ทันที — นี่คือสิ่งที่ชื่อสถานที่แบบพิมพ์เองทำไม่ได้
+                          <a
+                            href={`https://www.openstreetmap.org/?mlat=${order.meetupLat}&mlon=${order.meetupLng}#map=18/${order.meetupLat}/${order.meetupLng}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-1 inline-block text-xs font-medium text-primary-600 hover:underline"
+                          >
+                            เปิดแผนที่ →
+                          </a>
+                        )}
                       </>
                     ) : (
                       <p className="mt-1 text-sm text-neutral-400">ยังไม่ได้นัด</p>
                     )}
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="mt-3"
-                      onClick={() => openMeetupForm()}
-                    >
-                      {order?.meetupConfirmedAt ? "เปลี่ยนนัด" : "นัดเจอ"}
-                    </Button>
+                    {/* แยกปุ่มตามสิ่งที่อยากเปลี่ยน จะได้ไม่ต้องกรอกทั้งสองอย่างใหม่ทุกครั้ง */}
+                    <div className="mt-3 flex gap-2">
+                      <Button size="sm" variant="secondary" onClick={openPlaceSheet}>
+                        เลือกจุดนัด
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => openTimeSheet()}>
+                        เลือกเวลา
+                      </Button>
+                    </div>
                   </div>
 
                   {meetups.length > 0 && (

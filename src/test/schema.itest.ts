@@ -430,16 +430,43 @@ type ProposalRow = {
 
 const tomorrow = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
-const proposeMeetup = (orderId: string, from: string, at: string | null, place: string) =>
-  q<ProposalRow>(`select * from propose_meetup($1,$2,$3,$4)`, [orderId, from, at, place]);
+const proposeMeetup = (
+  orderId: string,
+  from: string,
+  at: string | null,
+  place: string | null,
+  lat: number | null = null,
+  lng: number | null = null,
+  note: string | null = null
+) =>
+  q<ProposalRow>(`select * from propose_meetup($1,$2,$3,$4,$5,$6,$7)`, [
+    orderId,
+    from,
+    at,
+    place,
+    lat,
+    lng,
+    note,
+  ]);
 
 const respondMeetup = (proposalId: string, responder: string, accept: boolean) =>
   q<ProposalRow>(`select * from respond_meetup($1,$2,$3)`, [proposalId, responder, accept]);
 
 const orderOf = async (orderId: string) =>
   (
-    await q<{ status: string; meetup_at: string | null; meetup_place: string | null; meetup_confirmed_at: string | null; meetup_proposed_by: string | null }>(
-      `select status, meetup_at, meetup_place, meetup_confirmed_at, meetup_proposed_by from orders where id = $1`,
+    await q<{
+      status: string;
+      meetup_at: string | null;
+      meetup_place: string | null;
+      meetup_confirmed_at: string | null;
+      meetup_proposed_by: string | null;
+      meetup_lat: number | null;
+      meetup_lng: number | null;
+      meetup_place_note: string | null;
+    }>(
+      `select status, meetup_at, meetup_place, meetup_confirmed_at, meetup_proposed_by,
+              meetup_lat, meetup_lng, meetup_place_note
+       from orders where id = $1`,
       [orderId]
     )
   )[0];
@@ -590,5 +617,53 @@ describe("นัดที่ยังไม่ระบุเวลา (migratio
     expect(order.meetup_place).toBe("ย้ายไปหน้าเซเว่น");
     expect(new Date(order.meetup_at!).toISOString()).toBe(new Date(at).toISOString());
     expect(order.status).toBe("meetup_scheduled");
+  });
+});
+
+// ---- จุดนัดเป็นหมุดบนแผนที่ (migration 025) ----
+//
+// สิ่งที่ต้องพิสูจน์: เสนอทีละอย่างได้ (เวลาอย่างเดียว / จุดนัดอย่างเดียว) และการตอบรับข้อเสนอที่มี
+// แค่อย่างเดียว ต้องไม่ไปล้างอีกอย่างที่ตกลงกันไว้แล้วทิ้ง
+describe("จุดนัดบนแผนที่ (migration 025)", () => {
+  it("เสนอเฉพาะจุดนัด → ตกลงแล้วออเดอร์ได้ทั้งชื่อและพิกัด", async () => {
+    const { orderId, buyerId, sellerId } = await seedOrder();
+    const [p] = await proposeMeetup(orderId, buyerId, null, "หน้าเมญ่า", 18.8018, 98.9673, "ตรงป้ายรถเมล์");
+    await respondMeetup(p.id, sellerId, true);
+
+    const order = await orderOf(orderId);
+    expect(order.meetup_place).toBe("หน้าเมญ่า");
+    expect(Number(order.meetup_lat)).toBeCloseTo(18.8018, 4);
+    expect(Number(order.meetup_lng)).toBeCloseTo(98.9673, 4);
+    expect(order.meetup_place_note).toBe("ตรงป้ายรถเมล์");
+    // ยังไม่มีเวลา จึงยังไม่ใช่ "นัดเจอแล้ว"
+    expect(order.status).toBe("reserved");
+  });
+
+  it("เสนอเฉพาะเวลาทีหลัง → ได้เวลาเพิ่ม แต่จุดนัดกับพิกัดเดิมต้องไม่หาย", async () => {
+    const { orderId, buyerId, sellerId } = await seedOrder();
+    const [place] = await proposeMeetup(orderId, buyerId, null, "หน้าเมญ่า", 18.8018, 98.9673);
+    await respondMeetup(place.id, sellerId, true);
+
+    const at = tomorrow();
+    const [time] = await proposeMeetup(orderId, sellerId, at, null);
+    await respondMeetup(time.id, buyerId, true);
+
+    const order = await orderOf(orderId);
+    expect(order.status).toBe("meetup_scheduled");
+    expect(new Date(order.meetup_at!).toISOString()).toBe(new Date(at).toISOString());
+    expect(order.meetup_place).toBe("หน้าเมญ่า");
+    expect(Number(order.meetup_lat)).toBeCloseTo(18.8018, 4);
+  });
+
+  it("ข้อเสนอที่ไม่มีทั้งเวลาและจุดนัด เสนอไม่ได้", async () => {
+    const { orderId, buyerId } = await seedOrder();
+    await expect(proposeMeetup(orderId, buyerId, null, null)).rejects.toThrow(/time or a place/);
+    await expect(proposeMeetup(orderId, buyerId, null, "   ")).rejects.toThrow(/time or a place/);
+  });
+
+  it("พิกัดนอกช่วงที่เป็นไปได้ ฐานข้อมูลปฏิเสธ", async () => {
+    const { orderId, buyerId } = await seedOrder();
+    await expect(proposeMeetup(orderId, buyerId, null, "ที่ไหนสักแห่ง", 95, 98)).rejects.toThrow();
+    await expect(proposeMeetup(orderId, buyerId, null, "ที่ไหนสักแห่ง", 18, 200)).rejects.toThrow();
   });
 });
