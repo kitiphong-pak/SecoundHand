@@ -61,13 +61,14 @@ export function buildChatRows(messages: ChatMessage[], now: Date): ChatRow[] {
       });
     }
 
+    // ไม่ต้องเช็คว่าข้ามวันหรือยังในนี้ — การข้ามวันถูกตัดกลุ่มด้วย newDay กับเงื่อนไข dayKey
+    // ของ endsGroup ข้างล่างอยู่แล้ว ใส่ซ้ำจะกลายเป็นเงื่อนไขที่ลบทิ้งแล้วไม่มีเทสไหนพัง
     const sameGroup = (a: ChatMessage | undefined, b: ChatMessage) =>
       Boolean(
         a &&
           !isCard(a) &&
           !isCard(b) &&
           a.fromUserId === b.fromUserId &&
-          dayKey(a.createdAt) === dayKey(b.createdAt) &&
           Math.abs(new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) <= GROUP_WINDOW_MS
       );
 
