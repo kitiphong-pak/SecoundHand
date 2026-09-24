@@ -702,13 +702,17 @@ export function ChatThread({
             {detectedTime.approximate ? "น่าจะราวๆ" : "="}{" "}
             {formatMeetupAt(detectedTime.at.toISOString())} น.
           </span>
+          {/* กดแล้วส่งเลย ไม่พาไปกรอกฟอร์มที่เติมค่าเดิมไว้ให้กดซ้ำ — เวลาที่จะส่งเขียนอยู่บนชิปนี้
+              แล้ว การให้ยืนยันอีกรอบคือถามคำถามเดิมสองครั้ง ใครอยากเลือกเวลาเองมีไอคอนนาฬิกาอยู่
+              ข้างช่องพิมพ์ และข้อเสนอนี้เสนอใหม่ทับได้ตลอดถ้าเดาไม่ตรง */}
           <button
             type="button"
+            disabled={sending}
             onClick={() => {
               markTimeHandled(detectedTime.messageId);
-              openTimeSheet(detectedTime.at);
+              void sendMeetup({ meetupAt: detectedTime.at.toISOString() });
             }}
-            className="rounded-[var(--radius-sm)] bg-primary-500 px-2.5 py-1 font-medium text-white hover:bg-primary-600"
+            className="rounded-[var(--radius-sm)] bg-primary-500 px-2.5 py-1 font-medium text-white hover:bg-primary-600 disabled:bg-neutral-300"
           >
             ใช้เวลานี้นัด
           </button>
