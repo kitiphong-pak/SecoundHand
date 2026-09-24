@@ -20,10 +20,17 @@ export type ChatRow =
       endsGroup: boolean;
     };
 
-const dayKey = (iso: string) => {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-};
+/**
+ * "วันไหน" ยึดเวลาไทยเสมอ ไม่ใช่ timezone ของเครื่องที่เปิดดู
+ *
+ * ถ้ายึดเครื่อง ข้อความที่ส่งตอน 23:58 กับ 00:01 เวลาไทยจะกลายเป็นวันเดียวกันเมื่อเปิดดูจาก
+ * เครื่องที่ตั้งเป็น UTC (ต่างกัน 7 ชั่วโมง) — คู่ซื้อขายสองคนจะเห็นเส้นคั่นวันคนละแบบทั้งที่
+ * คุยกันอยู่ในห้องเดียวกัน และเป็นสาเหตุที่เทสผ่านบนเครื่องไทยแต่แดงบน CI ที่รันด้วย UTC
+ *
+ * en-CA ให้รูปแบบ YYYY-MM-DD ซึ่งเทียบกันตรงๆ ได้
+ */
+const dayKey = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
 
 // "วันนี้/เมื่อวาน" อ่านง่ายกว่าวันที่เต็มสำหรับข้อความที่เพิ่งคุยกัน ส่วนที่เก่ากว่านั้นบอกวันที่ไปเลย
 // เพราะ "3 วันก่อน" ต้องนับนิ้วเอาเอง
@@ -34,7 +41,12 @@ const dateLabel = (iso: string, now: Date) => {
 
   if (dayKey(iso) === dayKey(now.toISOString())) return "วันนี้";
   if (dayKey(iso) === dayKey(yesterday.toISOString())) return "เมื่อวาน";
-  return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+  return d.toLocaleDateString("th-TH", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Bangkok",
+  });
 };
 
 /** การ์ด (เสนอราคา/ขอนัดเจอ) มีกรอบของตัวเอง จึงไม่ถูกรวมกลุ่มกับข้อความธรรมดา */
