@@ -65,7 +65,9 @@ export default async function ChatPage({
 
   return (
     // ให้แชทสูงเต็มพื้นที่ที่เหลือของจอ แทนกล่องความสูงตายตัวที่ทำให้มีสกรอลล์ซ้อนสกรอลล์สองชั้น
-    <div className="flex h-[100dvh] flex-col bg-neutral-50">
+    // บนมือถือต้องหักความสูงแถบเมนูล่างแบบ fixed ออกก่อน (body มี pb-14 รองรับมันอยู่ — ดู layout.tsx)
+    // ไม่งั้นความสูงรวมจะเกินจอไป 56px แล้วทั้งหน้าจะเลื่อนได้ทั้งที่ตั้งใจให้เลื่อนเฉพาะในแชท
+    <div className="flex h-[calc(100dvh-3.5rem)] flex-col bg-neutral-50 sm:h-[100dvh]">
       <Header user={user} />
       <main className="mx-auto flex w-full max-w-lg min-h-0 flex-1 flex-col px-5 pt-4 pb-4">
         <div className="mb-2">

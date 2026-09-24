@@ -466,7 +466,9 @@ export function ChatThread({
       {/* นัดที่ตกลงกันแล้วกับชิปถามเวลาลอยคนละมุม (บนสุด / ล่างสุด) ตั้งใจให้อยู่ไกลกันไปเลย —
           ตอนอยู่ชั้นเดียวกันมันเบียดกันจนอ่านยาก และอย่างหนึ่งเป็นข้อมูลถาวร อีกอย่างเป็นคำถาม
           ชั่วคราวที่ต้องอยู่ติดมือใกล้ช่องพิมพ์ */}
-      <div className="relative flex flex-1 flex-col">
+      {/* min-h-0 ขาดไม่ได้ในทุกชั้นของสายนี้ — ค่าเริ่มต้นของ flex item คือห้ามหดต่ำกว่าเนื้อหา
+          ถ้าไม่ใส่ กล่องข้อความจะดันความสูงจนช่องพิมพ์ตกขอบล่างจอไปเลย แทนที่จะเลื่อนในตัวเอง */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
         {/* นัดที่ตกลงกันแล้ว ปักไว้บนสุดของแชท ไม่ต้องเลื่อนหาการ์ดเก่าในประวัติ */}
         {order?.meetupConfirmedAt && order.meetupAt && (
           <div className="absolute inset-x-0 top-0 z-10 border-b border-neutral-200 bg-success-50 px-3 py-2 text-xs text-neutral-700 shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
