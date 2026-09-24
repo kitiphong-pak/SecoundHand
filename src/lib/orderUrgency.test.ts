@@ -1,29 +1,26 @@
 import { describe, it, expect } from "vitest";
 import { getOrderUrgency } from "./orderUrgency";
+import { ORDER_STATUS_LABEL } from "./orderStatus";
 import type { OrderStatus } from "@/types";
 
 // จุดที่สำคัญที่สุดของไฟล์นี้: แต่ละสถานะต้องขึ้น "action" ให้ฝั่งที่ต้องทำอะไรต่อเท่านั้น
 // ฝั่งตรงข้ามต้องเห็นเป็น "waiting" เสมอ ไม่งั้นหน้าออเดอร์จะเรียงผิด ให้คนที่ไม่ต้องทำอะไร
 // เข้าใจผิดว่าต้องรีบทำ หรือคนที่ต้องรีบทำไม่เห็นว่าต้องรีบ
 describe("getOrderUrgency", () => {
-  it("pending_payment: action สำหรับผู้ซื้อ (ต้องจ่ายเงิน), waiting สำหรับผู้ขาย", () => {
-    expect(getOrderUrgency("pending_payment", "buyer", false)).toBe("action");
-    expect(getOrderUrgency("pending_payment", "seller", false)).toBe("waiting");
+  // จองแล้วแต่ยังไม่ได้นัด ไม่มีใครเป็นฝ่ายต้องกดปุ่มชัดๆ — ต้องทักไปนัดกันเอง จึงเร่งทั้งคู่
+  it("reserved: action ทั้งสองฝ่าย เพราะต้องนัดกันเองก่อน", () => {
+    expect(getOrderUrgency("reserved", "buyer", false)).toBe("action");
+    expect(getOrderUrgency("reserved", "seller", false)).toBe("action");
   });
 
-  it("paid: action สำหรับผู้ขาย (ต้องส่งมอบ), waiting สำหรับผู้ซื้อ", () => {
-    expect(getOrderUrgency("paid", "seller", false)).toBe("action");
-    expect(getOrderUrgency("paid", "buyer", false)).toBe("waiting");
+  it("meetup_scheduled: action ทั้งสองฝ่าย (ต้องไปตามนัด)", () => {
+    expect(getOrderUrgency("meetup_scheduled", "buyer", false)).toBe("action");
+    expect(getOrderUrgency("meetup_scheduled", "seller", false)).toBe("action");
   });
 
   it("awaiting_buyer_confirmation: action สำหรับผู้ซื้อ (ต้องยืนยันรับของ), waiting สำหรับผู้ขาย", () => {
     expect(getOrderUrgency("awaiting_buyer_confirmation", "buyer", false)).toBe("action");
     expect(getOrderUrgency("awaiting_buyer_confirmation", "seller", false)).toBe("waiting");
-  });
-
-  it("awaiting_otp_entry: action สำหรับผู้ขาย (ต้องกรอก OTP), waiting สำหรับผู้ซื้อ", () => {
-    expect(getOrderUrgency("awaiting_otp_entry", "seller", false)).toBe("action");
-    expect(getOrderUrgency("awaiting_otp_entry", "buyer", false)).toBe("waiting");
   });
 
   it("completed: review ถ้ายังไม่รีวิว, done ถ้ารีวิวแล้ว — ไม่ขึ้นกับ role", () => {
@@ -38,24 +35,15 @@ describe("getOrderUrgency", () => {
     expect(getOrderUrgency("cancelled", "seller", true)).toBe("done");
   });
 
-  it("disputed: waiting เสมอทั้งสองฝั่ง (รอแอดมินตัดสิน ไม่มีอะไรให้คู่ค้าทำเอง)", () => {
-    expect(getOrderUrgency("disputed", "buyer", false)).toBe("waiting");
-    expect(getOrderUrgency("disputed", "seller", false)).toBe("waiting");
-  });
-
+  // ดึงรายชื่อสถานะจาก ORDER_STATUS_LABEL แทนการพิมพ์เองซ้ำ — เพิ่มสถานะใหม่เมื่อไหร่เทสนี้จะ
+  // ครอบให้อัตโนมัติ ไม่ต้องหวังว่าจะมีคนจำได้ว่าต้องมาแก้เทสตรงนี้ด้วย
   it("ครบทุกสถานะใน OrderStatus ไม่มีสถานะไหนตกหล่นไม่ได้ถูกจัดอันดับ", () => {
-    const allStatuses: OrderStatus[] = [
-      "pending_payment",
-      "paid",
-      "awaiting_buyer_confirmation",
-      "awaiting_otp_entry",
-      "completed",
-      "disputed",
-      "cancelled",
-    ];
-    for (const status of allStatuses) {
-      const tier = getOrderUrgency(status, "buyer", false);
-      expect(["action", "waiting", "review", "done"]).toContain(tier);
+    for (const status of Object.keys(ORDER_STATUS_LABEL) as OrderStatus[]) {
+      for (const role of ["buyer", "seller"] as const) {
+        expect(["action", "waiting", "review", "done"]).toContain(
+          getOrderUrgency(status, role, false)
+        );
+      }
     }
   });
 });

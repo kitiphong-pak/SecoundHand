@@ -1,4 +1,13 @@
-import type { User, Product, Order, ChatMessage, Offer, Review, SupportMessage } from "@/types";
+import type {
+  User,
+  Product,
+  Order,
+  ChatMessage,
+  Offer,
+  MeetupProposal,
+  Review,
+  SupportMessage,
+} from "@/types";
 
 // Supabase/Postgres ใช้ชื่อคอลัมน์แบบ snake_case แต่โค้ดแอปทั้งหมด (components, pages)
 // ใช้ camelCase ตาม type ใน @/types — ฟังก์ชันพวกนี้แปลง row จาก Supabase ให้เป็น
@@ -43,14 +52,21 @@ export function mapOrder(row: Record<string, unknown>): Order {
     status: row.status as Order["status"],
     amount: Number(row.amount),
     paidAt: (row.paid_at as string | null) ?? undefined,
-    otpCode: (row.otp_code as string | null) ?? undefined,
-    otpExpiresAt: (row.otp_expires_at as string | null) ?? undefined,
     sellerMarkedDeliveredAt: (row.seller_marked_delivered_at as string | null) ?? undefined,
     buyerConfirmedAt: (row.buyer_confirmed_at as string | null) ?? undefined,
     completedAt: (row.completed_at as string | null) ?? undefined,
+    cancelReason: (row.cancel_reason as Order["cancelReason"]) ?? undefined,
+    cancelledBy: (row.cancelled_by as string | null) ?? undefined,
     disputeReason: (row.dispute_reason as string | null) ?? undefined,
     disputeOpenedAt: (row.dispute_opened_at as string | null) ?? undefined,
     cancelledAt: (row.cancelled_at as string | null) ?? undefined,
+    meetupAt: (row.meetup_at as string | null) ?? undefined,
+    meetupPlace: (row.meetup_place as string | null) ?? undefined,
+    meetupLat: (row.meetup_lat as number | null) ?? undefined,
+    meetupLng: (row.meetup_lng as number | null) ?? undefined,
+    meetupPlaceNote: (row.meetup_place_note as string | null) ?? undefined,
+    meetupProposedBy: (row.meetup_proposed_by as string | null) ?? undefined,
+    meetupConfirmedAt: (row.meetup_confirmed_at as string | null) ?? undefined,
     createdAt: row.created_at as string,
   };
 }
@@ -77,6 +93,7 @@ export function mapMessage(row: Record<string, unknown>): ChatMessage {
     createdAt: row.created_at as string,
     read: row.read as boolean,
     offerId: (row.offer_id as string | null) ?? undefined,
+    meetupProposalId: (row.meetup_proposal_id as string | null) ?? undefined,
   };
 }
 
@@ -88,6 +105,22 @@ export function mapOffer(row: Record<string, unknown>): Offer {
     toUserId: row.to_user_id as string,
     amount: Number(row.amount),
     status: row.status as Offer["status"],
+    createdAt: row.created_at as string,
+    respondedAt: (row.responded_at as string | null) ?? undefined,
+  };
+}
+
+export function mapMeetupProposal(row: Record<string, unknown>): MeetupProposal {
+  return {
+    id: row.id as string,
+    orderId: row.order_id as string,
+    proposedBy: row.proposed_by as string,
+    meetupAt: (row.meetup_at as string | null) ?? undefined,
+    place: (row.place as string | null) ?? undefined,
+    lat: (row.lat as number | null) ?? undefined,
+    lng: (row.lng as number | null) ?? undefined,
+    placeNote: (row.place_note as string | null) ?? undefined,
+    status: row.status as MeetupProposal["status"],
     createdAt: row.created_at as string,
     respondedAt: (row.responded_at as string | null) ?? undefined,
   };

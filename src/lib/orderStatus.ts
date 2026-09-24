@@ -7,38 +7,31 @@ type StatusBadge = { label: string; status: BadgeStatus };
 
 // ป้ายกลางๆ สำหรับคนที่ไม่ใช่คู่ซื้อขาย เช่นหน้าผู้ดูแล หรือหน้าสินค้าที่ใครเปิดดูก็ได้
 export const ORDER_STATUS_LABEL: Record<OrderStatus, StatusBadge> = {
-  pending_payment: { label: "รอชำระเงิน", status: "pending" },
-  paid: { label: "ชำระเงินแล้ว รอส่งมอบ", status: "info" },
+  reserved: { label: "จองแล้ว รอนัดเจอ", status: "pending" },
+  meetup_scheduled: { label: "นัดเจอแล้ว", status: "info" },
   awaiting_buyer_confirmation: { label: "รอผู้ซื้อยืนยันรับสินค้า", status: "info" },
-  awaiting_otp_entry: { label: "รอผู้ขายกรอก OTP", status: "info" },
-  completed: { label: "ปิดการซื้อขายแล้ว", status: "success" },
-  disputed: { label: "มีข้อพิพาท", status: "error" },
-  cancelled: { label: "ยกเลิก คืนเงินแล้ว (เดโม)", status: "neutral" },
+  completed: { label: "ซื้อขายสำเร็จ", status: "success" },
+  cancelled: { label: "ยกเลิกแล้ว", status: "neutral" },
 };
 
 // ป้ายที่คู่ซื้อขายเห็น — เขียนจากมุมของคนอ่าน ไม่ใช่มุมของระบบ
 //
 // ปัญหาของป้ายกลางคือมันบอกว่า "ระบบกำลังรออะไร" ซึ่งอ่านแล้วไม่รู้ว่าตัวเองต้องทำอะไร
-// เช่น "รอผู้ขายกรอก OTP" ฝั่งผู้ซื้ออ่านแล้วนึกว่าไม่ต้องทำอะไร ทั้งที่ต้องแจ้งรหัสให้ผู้ขายก่อน
-// ไม่งั้นออเดอร์ไม่มีทางเดินต่อ
+// เช่น "จองแล้ว รอนัดเจอ" อ่านแล้วไม่รู้ว่าต้องเป็นฝ่ายทักไปนัดเอง ไม่ใช่นั่งรอให้อีกฝ่ายทัก
 //
 // สีก็สื่อความหมายด้วย: pending (เหลือง) = ถึงตาคุณแล้ว, info (ฟ้า) = รออีกฝ่าย
 const PARTY_LABEL: Partial<Record<OrderStatus, Record<Party, StatusBadge>>> = {
-  pending_payment: {
-    buyer: { label: "รอคุณชำระเงิน", status: "pending" },
-    seller: { label: "รอผู้ซื้อชำระเงิน", status: "info" },
+  reserved: {
+    buyer: { label: "จองแล้ว — นัดวันรับของกับผู้ขาย", status: "pending" },
+    seller: { label: "มีคนจอง — นัดวันส่งของกับผู้ซื้อ", status: "pending" },
   },
-  paid: {
-    buyer: { label: "ชำระแล้ว รอผู้ขายส่งมอบ", status: "info" },
-    seller: { label: "ชำระแล้ว รอคุณส่งมอบ", status: "pending" },
+  meetup_scheduled: {
+    buyer: { label: "นัดแล้ว รอไปรับของ", status: "info" },
+    seller: { label: "นัดแล้ว รอไปส่งของ", status: "info" },
   },
   awaiting_buyer_confirmation: {
-    buyer: { label: "รอคุณยืนยันรับสินค้า", status: "pending" },
+    buyer: { label: "รอคุณยืนยันว่าได้รับของแล้ว", status: "pending" },
     seller: { label: "รอผู้ซื้อยืนยันรับสินค้า", status: "info" },
-  },
-  awaiting_otp_entry: {
-    buyer: { label: "แจ้งรหัสให้ผู้ขาย", status: "pending" },
-    seller: { label: "กรอกรหัสจากผู้ซื้อ", status: "pending" },
   },
 };
 

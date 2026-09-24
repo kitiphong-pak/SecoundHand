@@ -22,7 +22,7 @@ export async function POST(
     return NextResponse.json({ error: "ไม่มีสิทธิ์ทำรายการนี้" }, { status: 403 });
   }
 
-  if (order.status !== "awaiting_buyer_confirmation" && order.status !== "awaiting_otp_entry") {
+  if (order.status !== "awaiting_buyer_confirmation") {
     return NextResponse.json({ error: "ออเดอร์นี้ไม่อยู่ในสถานะที่รอ timeout" }, { status: 409 });
   }
 

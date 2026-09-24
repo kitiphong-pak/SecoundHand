@@ -15,6 +15,8 @@
 export interface QueryResult {
   data: unknown;
   error: unknown;
+  /** สำหรับ query ที่ใช้ { count: "exact" } — ปล่อยว่างได้ถ้าเทสไม่ได้สนใจ */
+  count?: number;
 }
 
 export interface RecordedCall {

@@ -34,15 +34,24 @@ export interface Product {
   createdAt: string;
 }
 
-// สถานะออเดอร์ตาม flow ยืนยันปิดการซื้อขายแบบ dual-confirmation + OTP
+// สถานะออเดอร์ของ flow นัดเจอ — เงินไม่ผ่านระบบ ผู้ซื้อจ่ายเองตอนเจอกัน
 export type OrderStatus =
-  | "pending_payment" // รอผู้ซื้อชำระเงิน (demo)
-  | "paid" // ชำระเงินแล้ว รอผู้ขายส่งมอบ
-  | "awaiting_buyer_confirmation" // ผู้ขายแจ้งส่งมอบแล้ว กำลังนับเวลารอผู้ซื้อยืนยัน
-  | "awaiting_otp_entry" // ผู้ซื้อยืนยันรับของแล้ว ระบบออก OTP รอผู้ขายกรอก
-  | "completed" // ปิดการซื้อขาย ปล่อยเงินให้ผู้ขายแล้ว (กรอก OTP ถูก หรือ auto-complete)
-  | "disputed" // มีข้อพิพาท รอแอดมินตัดสิน
-  | "cancelled"; // แอดมินตัดสินข้อพิพาทให้ฝั่งผู้ซื้อ ถือว่ายกเลิก/คืนเงิน (เดโม)
+  | "reserved" // จองไว้แล้ว รอนัดเจอกัน (หมดอายุเองถ้าไม่มีใครขยับ)
+  | "meetup_scheduled" // นัดวันเวลากันแล้ว (ใช้เต็มรูปแบบใน 1d)
+  | "awaiting_buyer_confirmation" // ผู้ขายกดส่งมอบแล้ว รอผู้ซื้อกดยืนยันปิดดีล
+  | "completed" // ซื้อขายจบ
+  | "cancelled"; // ยกเลิก — ดูสาเหตุที่ cancelReason
+
+/** เหตุผลที่ออเดอร์ถูกยกเลิก (ต้องตรงกับ check constraint ใน migration 020) */
+export type OrderCancelReason =
+  | "expired"
+  | "buyer_cancelled"
+  | "seller_cancelled"
+  | "late_cancel"
+  | "no_show_buyer"
+  | "no_show_seller"
+  | "item_mismatch"
+  | "admin";
 
 export interface Order {
   id: string;
@@ -52,14 +61,25 @@ export interface Order {
   status: OrderStatus;
   amount: number;
   paidAt?: string;
-  otpCode?: string; // สร้างตอนผู้ซื้อกดยืนยันได้รับของ ใช้ครั้งเดียว
-  otpExpiresAt?: string;
-  sellerMarkedDeliveredAt?: string; // เริ่มนับ timeout รอบที่ 1 (ผู้ซื้อ)
-  buyerConfirmedAt?: string; // เริ่มนับ timeout รอบที่ 2 (ผู้ขายกรอก OTP)
+  sellerMarkedDeliveredAt?: string; // เริ่มนับเวลารอผู้ซื้อยืนยันรับของ
+  buyerConfirmedAt?: string; // ผู้ซื้อกดยืนยันรับของแล้ว = ปิดดีล
+  // นัดที่ตกลงกันแล้ว (ว่างได้ — นัดกันนอกแอปหรือยังไม่ได้นัดก็ปิดดีลได้) มาจากข้อเสนอนัดที่ถูก
+  // ตอบรับใน MeetupProposal เก็บซ้ำไว้บนออเดอร์เพื่อให้อ่าน "ตกลงนัดกันเมื่อไหร่" ได้จากที่เดียว
+  meetupAt?: string;
+  meetupPlace?: string;
+  /** พิกัดของจุดนัด — จุดนัดมาจากการปักหมุดบนแผนที่เสมอ (migration 025) */
+  meetupLat?: number;
+  meetupLng?: number;
+  /** รายละเอียดจุดนัดที่หมุดบอกไม่ได้ เช่น "ตรงป้ายรถเมล์" */
+  meetupPlaceNote?: string;
+  meetupProposedBy?: string;
+  meetupConfirmedAt?: string;
   completedAt?: string;
   disputeReason?: string;
   disputeOpenedAt?: string;
-  cancelledAt?: string; // แอดมินตัดสินให้ฝั่งผู้ซื้อ
+  cancelReason?: OrderCancelReason;
+  cancelledBy?: string;
+  cancelledAt?: string; //
   createdAt: string;
 }
 
@@ -72,6 +92,7 @@ export interface ChatMessage {
   createdAt: string;
   read: boolean;
   offerId?: string; // ถ้าข้อความนี้คือการเสนอราคา ผูกกับแถวใน Offer — ดูสถานะล่าสุดจาก offers ไม่ใช่จากข้อความ
+  meetupProposalId?: string; // เช่นเดียวกัน แต่เป็นการ์ดขอนัดเจอ
 }
 
 // ข้อเสนอราคาต่อรองในแชท — เก็บแยกจากเนื้อข้อความเพราะมีสถานะเปลี่ยนได้หลังส่งไปแล้ว (ผู้รับ
@@ -86,6 +107,26 @@ export interface Offer {
   toUserId: string;
   amount: number;
   status: OfferStatus;
+  createdAt: string;
+  respondedAt?: string;
+}
+
+// ข้อเสนอนัดเจอในแชท — เหตุผลที่แยกเป็นแถวเหมือน Offer: สถานะเปลี่ยนได้หลังส่งไปแล้ว
+// superseded = ถูกข้อเสนอใหม่ทับก่อนมีคนตอบ ต่างจาก declined ที่อีกฝ่ายกดปฏิเสธจริงๆ
+export type MeetupProposalStatus = "pending" | "accepted" | "declined" | "superseded";
+
+export interface MeetupProposal {
+  id: string;
+  orderId: string;
+  proposedBy: string;
+  /** ว่างได้ — ตกลงสถานที่ก่อนแล้วค่อยเคาะเวลาทีหลังได้ ออเดอร์จะยังไม่นับว่า "นัดเจอแล้ว" */
+  meetupAt?: string;
+  /** ว่างได้เช่นกัน — เสนอเฉพาะเวลาโดยใช้ที่นัดเดิมก็ได้ (ต้องมีอย่างน้อยหนึ่งอย่าง) */
+  place?: string;
+  lat?: number;
+  lng?: number;
+  placeNote?: string;
+  status: MeetupProposalStatus;
   createdAt: string;
   respondedAt?: string;
 }

@@ -66,7 +66,7 @@ export default async function ProductDetailPage({
         : orderRow?.seller_id === user.id
           ? "seller"
           : undefined;
-    activeOrderBadge = orderStatusBadge((orderRow?.status as OrderStatus) ?? "pending_payment", party);
+    activeOrderBadge = orderStatusBadge((orderRow?.status as OrderStatus) ?? "reserved", party);
     if (orderRow && party) {
       activeOrderHref = `/orders/${orderRow.id}`;
 

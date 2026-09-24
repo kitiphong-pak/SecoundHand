@@ -12,13 +12,14 @@ export const URGENCY_LABEL: Record<UrgencyTier, string> = {
 };
 
 // สถานะไหน "ต้องรอฝั่งไหนขยับต่อ" — ใช้จัดอันดับความเร่งด่วนของ order list ให้รายการที่
-// ต้องทำก่อน (จ่ายเงิน/ยืนยันรับของ/ส่งของ/กรอก OTP) ขึ้นบนสุดเสมอ แทนที่จะเรียงตามเวลา
+// ต้องทำก่อน (นัดเจอ/ส่งมอบ/ยืนยันรับของ) ขึ้นบนสุดเสมอ แทนที่จะเรียงตามเวลา
 // ล่าสุดเฉยๆ ซึ่งทำให้รายการที่ปิดไปแล้วปนอยู่กับรายการที่ต้องรีบทำจนหาโฟกัสไม่เจอ
-const ACTIONABLE_ROLE: Partial<Record<OrderStatus, "buyer" | "seller">> = {
-  pending_payment: "buyer",
-  paid: "seller",
+// reserved/meetup_scheduled รอทั้งสองฝ่ายนัดกันเอง ไม่มีใครเป็นฝ่าย "ต้องกดปุ่ม" ชัดๆ จึงนับเป็น
+// action ของทั้งคู่ ส่วน awaiting_buyer_confirmation รอผู้ซื้อกดยืนยันฝ่ายเดียว
+const ACTIONABLE_ROLE: Partial<Record<OrderStatus, "buyer" | "seller" | "both">> = {
+  reserved: "both",
+  meetup_scheduled: "both",
   awaiting_buyer_confirmation: "buyer",
-  awaiting_otp_entry: "seller",
 };
 
 export function getOrderUrgency(
@@ -28,6 +29,6 @@ export function getOrderUrgency(
 ): UrgencyTier {
   if (status === "completed") return hasReviewed ? "done" : "review";
   if (status === "cancelled") return "done";
-  if (status === "disputed") return "waiting"; // รออยู่ระหว่างแอดมินตรวจสอบ ไม่มีอะไรให้ทำเอง
-  return ACTIONABLE_ROLE[status] === role ? "action" : "waiting";
+  const actionable = ACTIONABLE_ROLE[status];
+  return actionable === "both" || actionable === role ? "action" : "waiting";
 }

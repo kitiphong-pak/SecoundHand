@@ -29,7 +29,7 @@ const notoSansThai = Noto_Sans_Thai({
 
 export const metadata: Metadata = {
   title: "songtor — ตลาดของมือสองใกล้คุณ",
-  description: "ซื้อขายของมือสองออนไลน์ ปลอดภัยด้วยระบบยืนยัน OTP สองฝ่าย",
+  description: "ซื้อขายของมือสองกับคนในจังหวัดเดียวกัน นัดเจอ ดูของจริง แล้วค่อยจ่าย",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

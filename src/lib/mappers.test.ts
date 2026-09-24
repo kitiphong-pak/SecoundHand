@@ -88,8 +88,6 @@ describe("mapOrder", () => {
       seller_id: "u2",
       status: "pending_payment",
       amount: "500",
-      otp_code: null,
-      otp_expires_at: null,
       seller_marked_delivered_at: null,
       buyer_confirmed_at: null,
       completed_at: null,
@@ -99,8 +97,6 @@ describe("mapOrder", () => {
       created_at: "2026-01-01T00:00:00Z",
     };
     const order = mapOrder(row);
-    expect(order.otpCode).toBeUndefined();
-    expect(order.otpExpiresAt).toBeUndefined();
     expect(order.sellerMarkedDeliveredAt).toBeUndefined();
     expect(order.buyerConfirmedAt).toBeUndefined();
     expect(order.completedAt).toBeUndefined();

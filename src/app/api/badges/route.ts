@@ -5,8 +5,7 @@ import { supabase } from "@/lib/supabase";
 // จำนวนตัวเลขติดเมนู แทนกระดิ่งแจ้งเตือนแบบเดิม — คำนวณจากสถานะจริงตรงๆ ไม่ต้องมี
 // notification log แยกต่างหาก:
 // - แชท: จำนวน "ห้องแชท" (ไม่ใช่จำนวนข้อความ) ที่มีข้อความยังไม่อ่าน
-// - สินค้าของฉัน: จำนวนออเดอร์ที่ "ผู้ซื้อชำระเงินแล้ว" รอฉันแจ้งส่งมอบ (ไม่นับตอนแค่กดสั่งซื้อ
-//   แต่ยังไม่จ่ายเงิน เพราะตอนนั้นยังไม่มีอะไรให้ฉันทำ ต้องรอผู้ซื้อจ่ายก่อนถึงจะ actionable จริง)
+// - สินค้าของฉัน: จำนวนออเดอร์ที่มีคนจองไว้ รอฉันนัดเจอและส่งมอบ
 // - ออเดอร์ของฉัน: จำนวนของที่ฉันซื้อแล้วผู้ขายส่งมอบแล้ว รอฉันไปยืนยันรับ
 // - ติดต่อผู้ดูแล: ฝั่งผู้ใช้นับข้อความใหม่จากแอดมิน / ฝั่งแอดมินนับ "ห้อง" ที่มีข้อความใหม่รอตอบ
 export async function GET() {
@@ -19,7 +18,6 @@ export async function GET() {
     { count: unreadChats },
     { count: paidAwaitingShipment },
     { count: awaitingConfirmation },
-    { count: openDisputes },
     { count: unreadSupport },
     { data: openSupportRaw },
   ] = await Promise.all([
@@ -35,16 +33,12 @@ export async function GET() {
       .from("orders")
       .select("*", { count: "exact", head: true })
       .eq("seller_id", user.id)
-      .eq("status", "paid"),
+      .in("status", ["reserved", "meetup_scheduled"]),
     supabase
       .from("orders")
       .select("*", { count: "exact", head: true })
       .eq("buyer_id", user.id)
       .eq("status", "awaiting_buyer_confirmation"),
-    // นับข้อพิพาทที่ค้างเฉพาะแอดมิน — user ทั่วไปไม่ต้อง query ตารางนี้เลย
-    isAdmin
-      ? supabase.from("orders").select("*", { count: "exact", head: true }).eq("status", "disputed")
-      : Promise.resolve({ count: 0 }),
     // ข้อความจากแอดมินที่ผู้ใช้คนนี้ยังไม่ได้อ่าน (แอดมินไม่ต้องนับของตัวเอง)
     isAdmin
       ? Promise.resolve({ count: 0 })
@@ -64,7 +58,6 @@ export async function GET() {
     unreadChats: unreadChats ?? 0,
     paidAwaitingShipment: paidAwaitingShipment ?? 0,
     awaitingConfirmation: awaitingConfirmation ?? 0,
-    openDisputes: openDisputes ?? 0,
     unreadSupport: unreadSupport ?? 0,
     openSupport: Number(openSupportRaw ?? 0),
   });

@@ -31,23 +31,28 @@ export async function GET() {
 
   const [{ data: productRows }, { data: userRows }] = await Promise.all([
     productIds.length > 0
-      ? supabase.from("products").select("id, title").in("id", productIds)
-      : Promise.resolve({ data: [] as { id: string; title: string }[] }),
+      ? supabase.from("products").select("id, title, images").in("id", productIds)
+      : Promise.resolve({ data: [] as { id: string; title: string; images: string[] | null }[] }),
     otherUserIds.length > 0
-      ? supabase.from("users").select("id, name").in("id", otherUserIds)
-      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      ? supabase.from("users").select("id, name, avatar_url").in("id", otherUserIds)
+      : Promise.resolve({ data: [] as { id: string; name: string; avatar_url: string | null }[] }),
   ]);
-  const titleByProduct = new Map((productRows ?? []).map((p) => [p.id, p.title]));
-  const nameByUser = new Map((userRows ?? []).map((u) => [u.id, u.name]));
+  const productById = new Map((productRows ?? []).map((p) => [p.id, p]));
+  const userById = new Map((userRows ?? []).map((u) => [u.id, u]));
 
   const conversations = threads.map((t) => {
     const isSeller = t.seller_id === user.id;
     const otherUserId = isSeller ? t.buyer_id : t.seller_id;
+    const product = productById.get(t.product_id);
+    const other = userById.get(otherUserId);
     return {
       productId: t.product_id,
-      productTitle: titleByProduct.get(t.product_id) ?? "สินค้าไม่พบ",
+      productTitle: product?.title ?? "สินค้าไม่พบ",
+      // รูปสินค้ากับรูปโปรไฟล์ทำให้รายการห้องแชทกวาดตาหาได้เร็วกว่าอ่านชื่อทีละบรรทัด
+      productImage: product?.images?.[0] ?? null,
       otherUserId,
-      otherUserName: nameByUser.get(otherUserId) ?? "ผู้ใช้ไม่พบ",
+      otherUserName: other?.name ?? "ผู้ใช้ไม่พบ",
+      otherUserAvatarUrl: other?.avatar_url ?? null,
       lastText: t.last_message_text,
       lastAt: t.last_message_at,
       unread: isSeller ? t.seller_unread_count : t.buyer_unread_count,

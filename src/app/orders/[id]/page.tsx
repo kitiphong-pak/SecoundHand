@@ -34,10 +34,6 @@ export default async function OrderDetailPage({
 
   const badge = orderStatusBadge(order.status, role);
 
-  // ห้ามส่งรหัส OTP จริงไปให้ฝั่งผู้ขายเด็ดขาด (ต้องรับจากผู้ซื้อเท่านั้นถึงจะกรอกได้)
-  // ต่อให้ UI ไม่แสดง ถ้าไม่ตัดออกตรงนี้ค่าจะรั่วไปกับ RSC payload ที่ส่งลง client อยู่ดี
-  const orderForClient = role === "seller" ? { ...order, otpCode: undefined } : order;
-
   // รีวิวได้เฉพาะออเดอร์ที่ปิดการซื้อขายแล้ว — เช็คว่าฉันรีวิวอีกฝ่ายไปหรือยัง
   // และอีกฝ่ายรีวิวฉันไว้หรือเปล่า (โชว์ให้ดูได้ด้วยถ้ามี)
   let myReview = null;
@@ -85,15 +81,8 @@ export default async function OrderDetailPage({
             </span>
           </div>
 
-          {order.status === "disputed" && order.disputeReason && (
-            <div className="mt-4 rounded-[var(--radius-md)] bg-error-50 p-3 text-sm text-error-500">
-              <p className="font-medium">เหตุผลข้อพิพาท</p>
-              <p className="mt-1">{order.disputeReason}</p>
-            </div>
-          )}
-
           <div className="mt-5 border-t border-neutral-100 pt-5">
-            <OrderActions order={orderForClient} role={role} />
+            <OrderActions order={order} role={role} />
           </div>
 
           {order.status === "completed" && (

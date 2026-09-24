@@ -117,8 +117,8 @@ describe("ตัวเลขแจ้งเตือน", () => {
   it("ผู้ใช้ทั่วไปไม่ได้ตัวเลขของฝั่งแอดมิน", async () => {
     for (let i = 0; i < 8; i++) mock.current!.queueResult({ data: [], error: null });
     const body = await (await badges()).json();
-    expect(body.openDisputes).toBe(0);
     expect(body.openSupport).toBe(0);
+    expect(body.unreadSupport).toBe(0);
   });
 
   it("แอดมินไม่ถูกนับข้อความ support ของตัวเอง", async () => {
