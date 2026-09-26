@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createSupabaseMock, hasOp } from "@/test/supabaseMock";
+import { BUYER_CONFIRM_WINDOW_MS } from "@/lib/orderTiming";
 
 // สี่ route ที่เหลือ: กล่องแชท, ตัวเลขแจ้งเตือน, แก้ไขประกาศ และปุ่มจำลอง timeout ของเดโม
 // จุดร่วมคือทุกตัวต้องผูกกับ id ของคนที่ล็อกอินอยู่ ไม่ใช่รับ id มาจากคำขอ
@@ -80,6 +81,7 @@ beforeEach(() => {
   mock.current = createSupabaseMock();
   mockUser.current = USER;
   completeOrderMock.current = async () => ({ id: "order-1", status: "completed" });
+  vi.unstubAllEnvs(); // เทสที่จำลอง production ไม่ควรทำให้เทสถัดไปรันในโหมดนั้นไปด้วยถ้ามันพังกลางทาง
 });
 
 describe("กล่องแชท", () => {
@@ -213,5 +215,36 @@ describe("ปุ่มจำลอง timeout (เดโม)", () => {
     };
     mock.current!.queueResult({ data: order(), error: null });
     expect((await simulateTimeout(new Request("http://localhost/x", { method: "POST" }), orderParams)).status).toBe(409);
+  });
+
+  // ปุ่มเดโมต้องไม่ใช่ "ทางลับข้ามกำหนด" เพราะ completeOrder บังคับกำหนด 3 วันกับทุกคนเท่ากันแล้ว
+  // มันจึงต้องจำลองเวลาผ่านไปจริงๆ คือเลื่อนเวลาที่ผู้ขายกดส่งมอบย้อนไปให้พ้นกำหนดก่อน
+  it("เลื่อนเวลาส่งมอบย้อนไปพ้นกำหนดก่อนปิดออเดอร์ และล็อกสถานะเดิมไว้ด้วย", async () => {
+    mock.current!.queueResult({ data: order(), error: null });
+
+    await simulateTimeout(new Request("http://localhost/x", { method: "POST" }), orderParams);
+
+    const backdate = mock.current!.callsTo("orders")[1];
+    const payload = backdate.ops.find(([m]) => m === "update")?.[1] as Record<string, string>;
+    const moved = new Date(payload.seller_marked_delivered_at).getTime();
+    expect(Date.now() - moved).toBeGreaterThan(BUYER_CONFIRM_WINDOW_MS);
+    expect(hasOp(backdate, "eq", "status", "awaiting_buyer_confirmation")).toBe(true);
+  });
+
+  // บน production ปุ่มนี้คือทางให้ผู้ขายปิดออเดอร์เองก่อนครบ 3 วันโดยผู้ซื้อไม่เคยยืนยัน
+  // (completeOrder ไม่ได้เช็คเวลา เงื่อนไขรอ 3 วันอยู่ในคิวรีของ cron เท่านั้น) จึงต้องไม่มีอยู่จริง
+  it("บน production → 404 เหมือนไม่มี route นี้ ไม่แตะฐานข้อมูลและไม่ปิดออเดอร์", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    let called = false;
+    completeOrderMock.current = async () => {
+      called = true;
+      return {};
+    };
+    mock.current!.queueResult({ data: order(), error: null });
+
+    const res = await simulateTimeout(new Request("http://localhost/x", { method: "POST" }), orderParams);
+    expect(res.status).toBe(404);
+    expect(called).toBe(false);
+    expect(mock.current!.calls).toHaveLength(0);
   });
 });

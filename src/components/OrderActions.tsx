@@ -157,7 +157,9 @@ export function OrderActions({ order, role }: { order: Order; role: "buyer" | "s
               </p>
             </>
           )}
-          {role === "seller" && (
+          {/* ปุ่มนี้คู่กับ endpoint ที่ปิดไว้บน production (ตอบ 404) จึงต้องหายไปพร้อมกัน ไม่งั้น
+              ผู้ขายจะเห็นปุ่มที่กดแล้วขึ้น error — ค่านี้ถูกแทนที่ตอน build ปุ่มจึงไม่ติดไปใน bundle */}
+          {role === "seller" && process.env.NODE_ENV !== "production" && (
             <button
               type="button"
               disabled={loading}
