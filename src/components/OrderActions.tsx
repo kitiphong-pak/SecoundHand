@@ -1,0 +1,214 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/Button";
+import { Countdown } from "@/components/Countdown";
+import type { Order } from "@/types";
+import { BUYER_CONFIRM_WINDOW_MS } from "@/lib/orderTiming";
+import { callApi, messageOf } from "@/lib/apiResponse";
+
+function call(url: string, body?: object) {
+  return callApi(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+export function OrderActions({ order, role }: { order: Order; role: "buyer" | "seller" }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setLoading(true);
+    setError("");
+    try {
+      await fn();
+      router.refresh();
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ออเดอร์รอฝั่งตรงข้ามทำอะไรบางอย่างอยู่ (นัดเจอ/ส่งมอบ/ยืนยันรับของ)
+  // ต้อง refresh หน้าเป็นระยะเพื่อดึงสถานะล่าสุด ไม่งั้นต้องกด reload เองถึงจะเห็นการเปลี่ยนแปลง
+  const isTerminal =
+    order.status === "completed" || order.status === "cancelled";
+
+  // อีกฝ่ายอาจกดทำอะไรระหว่างที่เราเปิดหน้านี้ค้างไว้ (ผู้ขายแจ้งส่งมอบ, cron ปิดออเดอร์) เลยต้อง
+  // คอยเช็คสถานะ แต่ถามผ่าน endpoint ที่อ่านคอลัมน์เดียวแทนการสั่ง router.refresh() รัวๆ ซึ่งสั่ง
+  // ให้ทั้งหน้า render ใหม่ทุกรอบทั้งที่ส่วนใหญ่ไม่มีอะไรเปลี่ยน — refresh เฉพาะตอนที่สถานะต่างจริง
+  //
+  // และหยุดถามเมื่อผู้ใช้สลับแท็บไปทำอย่างอื่น เพราะไม่มีใครดูอยู่ พอกลับมาค่อยเช็คทันที 1 รอบ
+  useEffect(() => {
+    if (isTerminal) return;
+
+    let stopped = false;
+    const check = async () => {
+      if (document.hidden || stopped) return;
+      try {
+        const res = await fetch(`/api/orders/${order.id}/status`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!stopped && data.status !== order.status) router.refresh();
+      } catch {
+        // เน็ตหลุดชั่วคราวไม่ต้องทำอะไร รอบหน้าค่อยลองใหม่
+      }
+    };
+
+    const interval = setInterval(check, 4000);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [isTerminal, router, order.id, order.status]);
+
+  return (
+    <div className="flex flex-col gap-3">
+      {error && <p className="text-sm text-error-500">{error}</p>}
+
+      {/* จองแล้ว รอเจอกัน */}
+      {(order.status === "reserved" || order.status === "meetup_scheduled") && (
+        <>
+          {/* นัดที่ตกลงกันแล้วเป็นข้อมูลชิ้นที่สำคัญที่สุดของออเดอร์ตอนนี้ — ต้องเห็นทันทีโดยไม่ต้อง
+              เปิดแชทไปเลื่อนหาการ์ดเก่า ส่วนการ "นัด" ยังอยู่ในแชทที่เดียว เพราะมันคือการคุยกัน */}
+          {order.meetupConfirmedAt && order.meetupAt ? (
+            <div className="rounded-[var(--radius-md)] border border-success-500/30 bg-success-50 p-3 text-sm">
+              <p className="font-medium text-neutral-900">
+                นัดเจอ{" "}
+                {new Date(order.meetupAt).toLocaleString("th-TH", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                })}{" "}
+                น.
+              </p>
+              <p className="mt-0.5 text-neutral-700">ที่ {order.meetupPlace}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-neutral-600">
+              {role === "seller"
+                ? "ยังไม่ได้นัดวันเวลา — กดนัดเจอในแชทได้เลย เจอกันแล้วรับเงินสด/PromptPay ได้ทันที"
+                : "ยังไม่ได้นัดวันเวลา — กดนัดเจอในแชทได้เลย เจอกันแล้วดูของก่อนจ่ายเงิน"}
+            </p>
+          )}
+
+          <Link
+            href={`/chat/${order.productId}?with=${role === "buyer" ? order.sellerId : order.buyerId}`}
+            className="text-sm font-medium text-primary-600 hover:underline"
+          >
+            {order.meetupConfirmedAt ? "เปลี่ยนนัดในแชท →" : "ไปนัดวันเวลาในแชท →"}
+          </Link>
+
+          {/* คำเตือนความปลอดภัยต้องอยู่ตรงที่คนกำลังจะไปเจอกันจริง ไม่ใช่ซ่อนอยู่ในหน้าเงื่อนไขการ
+              ใช้งานที่ไม่มีใครเปิด — ระบบไม่ได้ถือเงินและไม่มีใครไปด้วย ความปลอดภัยอยู่ที่ตัวผู้ใช้เอง */}
+          <p className="rounded-[var(--radius-md)] bg-warning-50 px-3 py-2 text-xs text-neutral-700">
+            นัดในที่สาธารณะที่มีคนพลุกพล่านและมีกล้องวงจรปิด ตรวจสภาพสินค้าให้ครบก่อนจ่ายเงิน
+            และอย่าโอนเงินล่วงหน้าก่อนเจอตัวจริง
+          </p>
+          {role === "seller" && (
+            <Button
+              disabled={loading}
+              onClick={() => run(() => call(`/api/orders/${order.id}/mark-delivered`))}
+            >
+              {loading ? "กำลังดำเนินการ..." : "ส่งมอบสินค้าแล้ว"}
+            </Button>
+          )}
+          {role === "buyer" && (
+            <button
+              type="button"
+              className="text-xs text-neutral-400 underline hover:text-error-500"
+              onClick={() => setShowCancelConfirm((v) => !v)}
+            >
+              ยกเลิกการจอง
+            </button>
+          )}
+        </>
+      )}
+
+      {/* รอผู้ซื้อยืนยันรับของ */}
+      {order.status === "awaiting_buyer_confirmation" && order.sellerMarkedDeliveredAt && (
+        <>
+          <p className="text-sm text-neutral-600">
+            รอผู้ซื้อยืนยันการรับสินค้า —{" "}
+            <Countdown
+              targetIso={new Date(
+                new Date(order.sellerMarkedDeliveredAt).getTime() + BUYER_CONFIRM_WINDOW_MS
+              ).toISOString()}
+            />
+          </p>
+          {role === "buyer" && (
+            <>
+              <Button
+                disabled={loading}
+                onClick={() => run(() => call(`/api/orders/${order.id}/confirm-receipt`))}
+              >
+                {loading ? "กำลังดำเนินการ..." : "ยืนยันได้รับสินค้าแล้ว"}
+              </Button>
+              <p className="text-xs text-neutral-400">
+                ของไม่ตรงปกหรือมีปัญหา? คุยกับผู้ขายในแชทก่อน ถ้าไม่จบให้แจ้งทีมผู้ดูแลที่หน้าติดต่อ
+              </p>
+            </>
+          )}
+          {/* ปุ่มนี้คู่กับ endpoint ที่ปิดไว้บน production (ตอบ 404) จึงต้องหายไปพร้อมกัน ไม่งั้น
+              ผู้ขายจะเห็นปุ่มที่กดแล้วขึ้น error — ค่านี้ถูกแทนที่ตอน build ปุ่มจึงไม่ติดไปใน bundle */}
+          {role === "seller" && process.env.NODE_ENV !== "production" && (
+            <button
+              type="button"
+              disabled={loading}
+              className="text-xs text-neutral-400 underline"
+              onClick={() => run(() => call(`/api/orders/${order.id}/simulate-timeout`))}
+            >
+              (เดโม) จำลองว่าเวลาหมดแล้ว — ระบบยืนยันแทน
+            </button>
+          )}
+        </>
+      )}
+
+      {/* ปิดการซื้อขายแล้ว */}
+      {order.status === "completed" && (
+        <>
+          <p className="text-sm text-success-500">✓ ซื้อขายสำเร็จเรียบร้อย</p>
+        </>
+      )}
+
+      {order.status === "cancelled" && (
+        <p className="text-sm text-neutral-500">ออเดอร์นี้ถูกยกเลิกแล้ว สินค้ากลับไปขายต่อตามปกติ</p>
+      )}
+
+      {/* ยืนยันยกเลิกคำสั่งซื้อ — แยกขั้นตอนกันกดพลาด */}
+      {showCancelConfirm && (
+        <div className="mt-2 flex flex-col gap-2 rounded-[var(--radius-md)] border border-error-500/30 bg-error-50 p-3">
+          <p className="text-sm text-neutral-700">
+            ยืนยันยกเลิกการจองนี้? สินค้าจะกลับไปขายต่อให้คนอื่นทันที
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={loading}
+              onClick={() =>
+                run(async () => {
+                  await call(`/api/orders/${order.id}/cancel`);
+                  setShowCancelConfirm(false);
+                })
+              }
+            >
+              ยืนยันยกเลิก
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setShowCancelConfirm(false)}>
+              ไม่ยกเลิก
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
